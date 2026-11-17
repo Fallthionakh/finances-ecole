@@ -113,6 +113,12 @@ label.f .input{font-weight:400;font-size:14px}
 .auth-card form{display:flex;flex-direction:column;gap:12px;margin-top:18px}
 .auth-card .err{color:var(--danger);font-size:13px;min-height:18px}
 .auth-card .ok{color:var(--in);font-size:13px}
+.pwd{position:relative;display:block}
+.pwd .input{width:100%;padding-right:44px}
+.pwd .eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;cursor:pointer;padding:6px;color:var(--muted);display:grid;place-items:center;border-radius:8px}
+.pwd .eye:hover{color:var(--text);background:#f1efe9}
+.pwd .eye svg{width:20px;height:20px}
+.auth-note{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);text-align:center}
 .user-box{font-size:11.5px;color:#9fb5af;padding:8px;border-top:1px solid #23403b;margin-top:8px}
 .user-box b{color:#e7efec;display:block;font-size:12.5px;overflow:hidden;text-overflow:ellipsis}
 .etab-sel{width:100%;margin:0 0 14px;background:var(--ink2);color:#fff;border:1px solid #2f4d48;border-radius:10px;padding:9px 10px;font-weight:600;font-size:13px}
@@ -1211,7 +1217,8 @@ async function afterLogin(user){
   const { data:role, error } = await sb.rpc('fin_rejoindre', { p_nom: user.user_metadata?.nom || null });
   if(error){ authScreen('erreur', 'Accès refusé : '+error.message); return; }
   SB.role=role;
-  if(role==='en_attente'){ authScreen('attente'); return; }
+  if(role==='suspendu'){ authScreen('suspendu'); return; }
+  if(!['admin','caissier','lecteur'].includes(role)){ authScreen('attente'); return; }
   canWrite = role==='admin' || role==='caissier';
   document.getElementById('authRoot').innerHTML='';
   mode='sb'; await sbLoadAll(); sbSubscribe(); render();
@@ -1238,7 +1245,8 @@ function sbSubscribe(){
     });
   });
   ch = ch.on('postgres_changes', { event:'*', schema:'public', table:'fin_membres' }, async pl=>{
-    if(pl.new && pl.new.user_id===SB.user?.id && pl.new.role!==SB.role){ location.reload(); return; }
+    if(pl.eventType==='DELETE' && pl.old?.user_id===SB.user?.id){ location.reload(); return; }
+    if(pl.new && pl.new.user_id===SB.user?.id && (pl.new.role!==SB.role || pl.new.actif===false)){ location.reload(); return; }
     if(SB.role==='admin'){ const { data } = await sb.from('fin_membres').select('*').order('cree_le'); SB.membres=data||[]; schedule(); }
   });
   SB.channel = ch.subscribe();
@@ -1259,58 +1267,109 @@ async function sbSave(col, id, out){
 async function sbLogout(){ try{ await sb.auth.signOut(); }catch(e){} location.hash=''; location.reload(); }
 function renderUserBox(){
   const el=document.getElementById('userBox'); if(!el) return;
-  el.innerHTML = SB.user ? `<div class="user-box"><b>${esc(SB.user.user_metadata?.nom||SB.user.email)}</b>${esc(roleLabel(SB.role))} · <button class="link" style="color:#9fe0cf" onclick="sbLogout()">Déconnexion</button></div>` : '';
+  el.innerHTML = SB.user ? `<div class="user-box"><b>${esc(SB.user.user_metadata?.nom||SB.user.email)}</b>${esc(roleLabel(SB.role))}<br><button class="link" style="color:#9fe0cf" onclick="formMonMdp()">Mon mot de passe</button> · <button class="link" style="color:#9fe0cf" onclick="sbLogout()">Déconnexion</button></div>` : '';
 }
+const EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.9 17.9A10.4 10.4 0 0 1 12 19c-7 0-11-7-11-7a19 19 0 0 1 5.1-5.9M9.9 5.2A9.7 9.7 0 0 1 12 5c7 0 11 7 11 7a19 19 0 0 1-2.2 3.2M14.1 14.1a3 3 0 1 1-4.2-4.2"/><path d="M1 1l22 22"/></svg>';
+function pwdInput(name, attrs=''){ return `<span class="pwd"><input class="input" type="password" name="${name}" ${attrs}><button type="button" class="eye" title="Afficher / masquer le mot de passe" aria-label="Afficher le mot de passe" onclick="toggleEye(this)">${EYE}</button></span>`; }
+function toggleEye(b){ const i=b.previousElementSibling; const show=i.type==='password'; i.type=show?'text':'password'; b.innerHTML=show?EYE_OFF:EYE; b.setAttribute('aria-label', show?'Masquer le mot de passe':'Afficher le mot de passe'); }
+function genMdp(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'; let p=''; const a=new Uint32Array(10); crypto.getRandomValues(a); a.forEach(v=>p+=c[v%c.length]); return p; }
+async function fnAdmin(body){
+  const { data, error } = await sb.functions.invoke('fin-admin', { body });
+  if(error){ let msg=error.message; try{ const j=await error.context.json(); msg=j.error||msg; }catch(e){} throw new Error(msg); }
+  if(data && data.error) throw new Error(data.error);
+  return data;
+}
+async function rechargerMembres(){ const { data } = await sb.from('fin_membres').select('*').order('cree_le'); SB.membres=data||[]; render(); }
 function vUtilisateurs(){
   const m=SB.membres||[];
-  return `<div class="card" style="margin-top:16px"><h3>Utilisateurs <span class="muted small">${m.length} compte(s)</span></h3>
-    <p class="muted small" style="margin-top:0">Chaque personne crée son compte depuis l'écran de connexion, puis vous lui attribuez un rôle. <b>Caissier</b> : saisit encaissements, dépenses, apprenants. <b>Lecteur</b> : consulte uniquement. <b>Administrateur</b> : tout, y compris établissements et utilisateurs.</p>
-    <div class="tbl-wrap"><table><thead><tr><th>Utilisateur</th><th>Inscrit le</th><th>Rôle</th><th></th></tr></thead><tbody>
-    ${m.map(u=>{ const moi=u.user_id===SB.user?.id; return `<tr><td><b>${esc(u.nom||'—')}</b><div class="muted small">${esc(u.email||'')}</div></td><td>${fdate((u.cree_le||'').slice(0,10))}</td>
-      <td>${moi?`<span class="pill p-acc">${roleLabel(u.role)} (vous)</span>`:`<select class="input" onchange="setRole('${u.user_id}',this.value)">${opt(ROLES,u.role)}</select>`}${u.role==='en_attente'?' <span class="pill p-part">À valider</span>':''}</td>
-      <td style="text-align:right">${moi?'':`<button class="btn sm ghost danger" onclick="retirerMembre('${u.user_id}')">Retirer</button>`}</td></tr>`; }).join('')}
+  return `<div class="card" style="margin-top:16px"><h3>Utilisateurs <span class="row"><span class="muted small">${m.length} compte(s)</span><button class="btn sm pri" onclick="formUtilisateur()">+ Nouvel utilisateur</button></span></h3>
+    <p class="muted small" style="margin-top:0">Vous créez les comptes et leurs mots de passe, aucun e-mail n'est envoyé. <b>Caissier</b> : saisit encaissements, dépenses, apprenants. <b>Lecteur</b> : consulte uniquement. <b>Administrateur</b> : tout, y compris établissements et utilisateurs.</p>
+    <div class="tbl-wrap"><table><thead><tr><th>Utilisateur</th><th>Rôle</th><th>Statut</th><th></th></tr></thead><tbody>
+    ${m.map(u=>{ const moi=u.user_id===SB.user?.id; const actif=u.actif!==false;
+      return `<tr style="${actif?'':'opacity:.6'}"><td><b>${esc(u.nom||'—')}</b><div class="muted small">${esc(u.email||'')}</div></td>
+      <td>${moi?`<span class="pill p-acc">${roleLabel(u.role)} (vous)</span>`:`<select class="input" onchange="actionUser('set_role','${u.user_id}',{role:this.value})">${opt(ROLES.filter(r=>r[0]!=='en_attente'),u.role)}${u.role==='en_attente'?'<option value="en_attente" selected>En attente</option>':''}</select>`}</td>
+      <td>${actif?'<span class="pill p-ok">Actif</span>':'<span class="pill p-no">Suspendu</span>'}</td>
+      <td style="text-align:right;white-space:nowrap">${moi?`<button class="btn sm" onclick="formMonMdp()">Mon mot de passe</button>`:`
+        <button class="btn sm" onclick="formResetMdp('${u.user_id}')">Mot de passe</button>
+        <button class="btn sm" onclick="actionUser('set_actif','${u.user_id}',{actif:${!actif}})">${actif?'Suspendre':'Activer'}</button>
+        <button class="btn sm ghost danger" onclick="retirerMembre('${u.user_id}')">Retirer</button>`}</td></tr>`; }).join('')}
     </tbody></table></div></div>`;
 }
-async function setRole(uid, role){
-  const { error } = await sb.from('fin_membres').update({ role }).eq('user_id', uid);
-  if(error){ toast('Échec : '+error.message,true); return; }
-  const u=SB.membres.find(x=>x.user_id===uid); if(u) u.role=role; toast('Rôle mis à jour'); render();
+async function actionUser(action, uid, extra={}){
+  try{ await fnAdmin({action, user_id:uid, ...extra}); toast({set_role:'Rôle mis à jour', set_actif: extra.actif?'Compte activé':'Compte suspendu'}[action]||'Enregistré'); }
+  catch(e){ toast('Échec : '+e.message,true); }
+  await rechargerMembres();
+}
+function formUtilisateur(){
+  openModal('Nouvel utilisateur', `<form id="fm" onsubmit="event.preventDefault()"><div class="fgrid">
+    <label class="f full">Prénom et nom *<input class="input" name="nom" required></label>
+    <label class="f full">E-mail (identifiant de connexion) *<input class="input" type="email" name="email" required autocomplete="off"></label>
+    <label class="f">Mot de passe * (8 caractères min.)${pwdInput('password','minlength="8" required autocomplete="new-password"')}</label>
+    <label class="f">Rôle<select class="input" name="role">${opt(ROLES.filter(r=>r[0]!=='en_attente'),'caissier')}</select></label>
+    <div class="full"><button type="button" class="link small" onclick="const i=document.querySelector('#fm [name=password]');i.value=genMdp();i.type='text';">Générer un mot de passe</button></div>
+    <p class="full muted small" style="margin:0">Si cette adresse a déjà un compte (par exemple sur l'application Webinaire), elle obtient simplement l'accès aux Finances et garde son mot de passe actuel.</p>
+  </div></form>`, `<button class="btn" onclick="closeModal()">Annuler</button><button class="btn pri" id="btnCreer" onclick="creerUtilisateur()">Créer le compte</button>`);
+}
+async function creerUtilisateur(){
+  const fm=document.getElementById('fm'); if(!fm.reportValidity()) return; const d=Object.fromEntries(new FormData(fm));
+  const b=document.getElementById('btnCreer'); b.disabled=true; b.textContent='Création…';
+  try{
+    const r=await fnAdmin({action:'create', email:d.email, password:d.password, nom:d.nom, role:d.role});
+    await rechargerMembres();
+    openModal('Compte créé', r.existait
+      ? `<p><b>${esc(d.email)}</b> avait déjà un compte : l'accès aux Finances lui est ouvert avec le rôle <b>${roleLabel(d.role)}</b>. Il se connecte avec son mot de passe habituel.</p>`
+      : `<p>Communiquez ces identifiants à <b>${esc(d.nom)}</b> :</p><div class="receipt" style="font-family:var(--mono);font-size:13.5px">Adresse : ${esc(location.origin+location.pathname)}<br>E-mail : ${esc(d.email)}<br>Mot de passe : ${esc(d.password)}</div><p class="muted small">Il pourra le changer ensuite via « Mon mot de passe ».</p>`,
+      r.existait?`<button class="btn pri" onclick="closeModal()">OK</button>`:`<button class="btn" onclick="copier(\`Adresse : ${esc(location.origin+location.pathname)}\\nE-mail : ${esc(d.email)}\\nMot de passe : ${esc(d.password)}\`)">Copier</button><button class="btn pri" onclick="closeModal()">OK</button>`);
+  }catch(e){ toast('Échec : '+e.message,true); b.disabled=false; b.textContent='Créer le compte'; }
+}
+async function copier(t){ try{ await navigator.clipboard.writeText(t); toast('Copié'); }catch(e){ toast('Copie impossible',true); } }
+function formResetMdp(uid){
+  const u=(SB.membres||[]).find(x=>x.user_id===uid)||{};
+  openModal('Réinitialiser le mot de passe', `<form id="fm" onsubmit="event.preventDefault()"><p style="margin-top:0">Nouveau mot de passe pour <b>${esc(u.nom||u.email)}</b> :</p>
+    ${pwdInput('password','minlength="8" required autocomplete="new-password"')}
+    <p><button type="button" class="link small" onclick="const i=document.querySelector('#fm [name=password]');i.value=genMdp();i.type='text';">Générer un mot de passe</button></p>
+    <p class="muted small">Ce compte de connexion est commun avec l'application Webinaire : le nouveau mot de passe s'y appliquera aussi.</p></form>`,
+    `<button class="btn" onclick="closeModal()">Annuler</button><button class="btn pri" onclick="resetMdp('${uid}')">Enregistrer</button>`);
+}
+async function resetMdp(uid){
+  const fm=document.getElementById('fm'); if(!fm.reportValidity()) return; const p=fm.password.value;
+  try{ await fnAdmin({action:'reset_password', user_id:uid, password:p}); closeModal(); toast('Mot de passe modifié'); }catch(e){ toast('Échec : '+e.message,true); }
+}
+function formMonMdp(){
+  openModal('Mon mot de passe', `<form id="fm" onsubmit="event.preventDefault()"><label class="f">Nouveau mot de passe (8 caractères min.)${pwdInput('password','minlength="8" required autocomplete="new-password"')}</label>
+    <label class="f" style="margin-top:12px">Confirmer${pwdInput('password2','minlength="8" required autocomplete="new-password"')}</label></form>`,
+    `<button class="btn" onclick="closeModal()">Annuler</button><button class="btn pri" onclick="changerMonMdp()">Enregistrer</button>`);
+}
+async function changerMonMdp(){
+  const fm=document.getElementById('fm'); if(!fm.reportValidity()) return;
+  if(fm.password.value!==fm.password2.value){ toast('Les deux mots de passe sont différents.',true); return; }
+  const { error } = await sb.auth.updateUser({ password: fm.password.value });
+  if(error){ toast('Échec : '+frErr(error),true); return; } closeModal(); toast('Mot de passe modifié');
 }
 function retirerMembre(uid){ confirmBox('Retirer l\'accès de cet utilisateur à l\'application ? (Son compte de connexion n\'est pas supprimé.)', async()=>{
-  const { error } = await sb.from('fin_membres').delete().eq('user_id', uid);
-  if(error){ toast('Échec : '+error.message,true); return; }
-  SB.membres=SB.membres.filter(x=>x.user_id!==uid); toast('Accès retiré'); render(); }, 'Retirer'); }
+  try{ await fnAdmin({action:'remove', user_id:uid}); toast('Accès retiré'); }catch(e){ toast('Échec : '+e.message,true); }
+  await rechargerMembres(); }, 'Retirer'); }
 
 /* Écrans de connexion */
 function authScreen(vue, msg=''){
   const root=document.getElementById('authRoot');
-  const titre = {login:'Connexion', inscription:'Créer un compte', oubli:'Mot de passe oublié', 'nouveau-mdp':'Nouveau mot de passe', attente:'Compte en attente', erreur:'Problème de connexion'}[vue];
+  const titre = {login:'Connexion', inscription:'Créer un compte', oubli:'Mot de passe oublié', 'nouveau-mdp':'Nouveau mot de passe', attente:'Accès non autorisé', suspendu:'Compte suspendu', erreur:'Problème de connexion'}[vue];
   let body='';
   if(vue==='login') body=`<form onsubmit="event.preventDefault();doLogin(this)">
       <label class="f">E-mail<input class="input" type="email" name="email" required autocomplete="email"></label>
-      <label class="f">Mot de passe<input class="input" type="password" name="password" required autocomplete="current-password"></label>
+      <label class="f">Mot de passe${pwdInput('password','required autocomplete="current-password"')}</label>
       <div class="err" id="authErr">${esc(msg)}</div>
       <button class="btn pri" style="justify-content:center">Se connecter</button></form>
-      <div class="row" style="justify-content:space-between;margin-top:14px"><button class="link small" onclick="authScreen('inscription')">Créer un compte</button><button class="link small" onclick="authScreen('oubli')">Mot de passe oublié ?</button></div>`;
-  if(vue==='inscription') body=`<form onsubmit="event.preventDefault();doSignup(this)">
-      <label class="f">Prénom et nom<input class="input" name="nom" required></label>
-      <label class="f">E-mail<input class="input" type="email" name="email" required autocomplete="email"></label>
-      <label class="f">Mot de passe (8 caractères minimum)<input class="input" type="password" name="password" minlength="8" required autocomplete="new-password"></label>
-      <div class="err" id="authErr"></div>
-      <button class="btn pri" style="justify-content:center">Créer mon compte</button></form>
-      <p class="muted small">Après création, un administrateur doit valider votre accès.</p>
-      <button class="link small" onclick="authScreen('login')">← Retour à la connexion</button>`;
-  if(vue==='oubli') body=`<form onsubmit="event.preventDefault();doReset(this)">
-      <label class="f">E-mail<input class="input" type="email" name="email" required></label>
-      <div class="err" id="authErr"></div>
-      <button class="btn pri" style="justify-content:center">Recevoir un lien par e-mail</button></form>
-      <button class="link small" style="margin-top:12px" onclick="authScreen('login')">← Retour à la connexion</button>`;
+      <div class="auth-note">Besoin d'un compte ou mot de passe oublié ?<br>Contactez l'administrateur de votre organisation.</div>`;
   if(vue==='nouveau-mdp') body=`<form onsubmit="event.preventDefault();doNewPwd(this)">
-      <label class="f">Nouveau mot de passe<input class="input" type="password" name="password" minlength="8" required autocomplete="new-password"></label>
+      <label class="f">Nouveau mot de passe${pwdInput('password','minlength="8" required autocomplete="new-password"')}</label>
       <div class="err" id="authErr"></div>
       <button class="btn pri" style="justify-content:center">Enregistrer</button></form>`;
-  if(vue==='attente') body=`<p>Votre compte <b>${esc(SB.user?.email||'')}</b> a bien été créé. Un administrateur doit maintenant vous attribuer un rôle (Paramètres → Utilisateurs).</p>
-      <div class="row"><button class="btn pri" onclick="location.reload()">Actualiser</button><button class="btn" onclick="sbLogout()">Déconnexion</button></div>`;
+  if(vue==='attente') body=`<p>Le compte <b>${esc(SB.user?.email||'')}</b> n'a pas accès à l'application Finances.</p><p class="muted small">Contactez l'administrateur de votre organisation.</p>`
+      +`<div class="row"><button class="btn" onclick="sbLogout()">Déconnexion</button></div>`;
+  if(vue==='suspendu') body=`<p>Le compte <b>${esc(SB.user?.email||'')}</b> est <b>suspendu</b>.</p><p class="muted small">Contactez l'administrateur de votre organisation.</p>`
+      +`<div class="row"><button class="btn" onclick="sbLogout()">Déconnexion</button></div>`;
   if(vue==='erreur') body=`<p style="color:var(--danger)">${esc(msg)}</p><div class="row"><button class="btn pri" onclick="location.reload()">Réessayer</button>${sb?'<button class="btn" onclick="sbLogout()">Déconnexion</button>':''}</div>`;
   root.innerHTML = `<div class="auth"><div class="auth-card"><div class="logo" style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#34d399,#0f766e);display:grid;place-items:center;font-weight:800;color:#06201b;font-size:20px">₣</div>
     <h2>${titre}</h2><div class="muted small">Finances – École de Formation</div>${body}</div></div>`;
@@ -1322,14 +1381,6 @@ function frErr(e){ const m=(e&&e.message)||''; if(/Invalid login/i.test(m)) retu
 async function doLogin(f){ const d=Object.fromEntries(new FormData(f)); authErr('');
   const { data, error } = await sb.auth.signInWithPassword({ email:d.email.trim(), password:d.password });
   if(error){ authErr(frErr(error)); return; } await afterLogin(data.user); }
-async function doSignup(f){ const d=Object.fromEntries(new FormData(f)); authErr('');
-  const { data, error } = await sb.auth.signUp({ email:d.email.trim(), password:d.password, options:{ data:{ nom:d.nom.trim() }, emailRedirectTo: location.origin+location.pathname } });
-  if(error){ authErr(frErr(error)); return; }
-  if(data.session){ await afterLogin(data.user); return; }
-  authOk('Compte créé. Ouvrez le lien de confirmation reçu par e-mail, puis connectez-vous.'); }
-async function doReset(f){ const d=Object.fromEntries(new FormData(f)); authErr('');
-  const { error } = await sb.auth.resetPasswordForEmail(d.email.trim(), { redirectTo: location.origin+location.pathname });
-  if(error){ authErr(frErr(error)); return; } authOk('Si un compte existe, un lien de réinitialisation a été envoyé.'); }
 async function doNewPwd(f){ const d=Object.fromEntries(new FormData(f));
   const { data, error } = await sb.auth.updateUser({ password:d.password });
   if(error){ authErr(frErr(error)); return; } history.replaceState(null,'',location.pathname); await afterLogin(data.user); }
