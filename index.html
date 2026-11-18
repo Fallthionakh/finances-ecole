@@ -107,6 +107,7 @@ label.f .input{font-weight:400;font-size:14px}
 .stat-line:last-child{border:0}
 .stat-line.total{font-weight:800;font-size:15px;border-top:2px solid var(--text);margin-top:4px}
 .menu-btn{display:none}
+body.ro [onclick^="formPaiement"], body.ro [onclick^="formDepense"], body.ro [onclick^="formApprenant"], body.ro [onclick^="formFormation"], body.ro [onclick^="formEtab"], body.ro [onclick^="del"], body.ro [onclick^="submit"]{display:none!important}
 .auth{position:fixed;inset:0;z-index:90;background:linear-gradient(160deg,#10221f,#1b3531 60%,#0f766e);display:grid;place-items:center;padding:20px;overflow-y:auto}
 .auth-card{background:#fff;border-radius:18px;width:100%;max-width:400px;padding:28px;box-shadow:0 30px 80px rgba(0,0,0,.35)}
 .auth-card h2{margin:6px 0 4px;font-size:20px}
@@ -324,9 +325,12 @@ async function saveDoc(col, obj){
   }
 }
 async function deleteDoc(col,id){
+  if(!canWrite){ toast('Accès en lecture seule : suppression impossible.',true); return false; }
   try{
     if(mode==='db') await db.collection(col).doc(id).delete();
-    else if(mode==='sb'){ const {error}=await sb.from(TBL(col)).delete().eq('id',id); if(error) throw error; RAW[col]=RAW[col].filter(x=>x.id!==id); render(); }
+    else if(mode==='sb'){ const {data,error}=await sb.from(TBL(col)).delete().eq('id',id).select('id'); if(error) throw error;
+      if(!data || !data.length){ toast('Suppression refusée : droits insuffisants.',true); return false; }
+      RAW[col]=RAW[col].filter(x=>x.id!==id); render(); }
     else { RAW[col]=RAW[col].filter(x=>x.id!==id); lsSave(); render(); }
     return true;
   }catch(e){ toast('Suppression impossible.',true); return false; }
@@ -361,6 +365,7 @@ function renderNav(){
 
 /* ================== Rendu principal ================== */
 function render(){
+  document.body.classList.toggle('ro', !canWrite);
   rescope(); renderNav(); setDbState();
   const r=route(); const m=document.getElementById('main');
   let banner='';
@@ -730,6 +735,7 @@ const opt=(arr,val)=>arr.map(o=>{ const [v,l]=Array.isArray(o)?o:[o,o]; return `
 
 /* Formation */
 function formFormation(id){
+  if(!canWrite){ toast('Accès en lecture seule : modification impossible.',true); return; }
   if(!id && !needEtab()) return;
   const f = id ? byId('formations',id) : {};
   openModal(id?'Modifier la formation':'Nouvelle formation', `<form id="fm" onsubmit="event.preventDefault()"><div class="fgrid">
@@ -763,6 +769,7 @@ function delFormation(id){
 
 /* Apprenant */
 function formApprenant(id){
+  if(!canWrite){ toast('Accès en lecture seule : modification impossible.',true); return; }
   if(!id && !needEtab()) return;
   const a = id ? byId('apprenants',id) : {dateInscription:today(), statut:'actif'};
   const fOpts = [['','— Choisir —'], ...S.formations.map(f=>[f.id, `${f.nom} (${money(coutFormation(f))})`])];
@@ -861,6 +868,7 @@ function nouveauNumero(date, etabId, apprenantId){
   return prefixeRecu(etabId, apprenantId)+String(maxSeq(etabId)+1).padStart(4,'0');
 }
 function formPaiement(p={}){
+  if(!canWrite){ toast('Accès en lecture seule : modification impossible.',true); return; }
   if(!p.id && !p.apprenantId && !needEtab()) return;
   const id=p.id; p={date:today(), mode:'Espèces', motif:'Mensualité', ...p};
   const aOpts=[['','— Recette diverse (sans apprenant) —'], ...[...S.apprenants].sort((x,y)=>(x.nom||'').localeCompare(y.nom||'')).map(a=>[a.id, `${apprenantNom(a.id)} — ${formationOf(a)?.nom||''}${reste(a)>0?` (reste ${money(reste(a))})`:''}`])];
@@ -897,6 +905,7 @@ function delPaiement(id){ confirmBox('Supprimer cet encaissement ? Le reçu corr
 
 /* Dépense */
 function formDepense(d={}){
+  if(!canWrite){ toast('Accès en lecture seule : modification impossible.',true); return; }
   if(!d.id && !needEtab()) return;
   const id=d.id; d={date:today(), mode:'Espèces', categorie:CATS[0], ...d};
   openModal(id?'Modifier la dépense':'Nouvelle dépense', `<form id="fm" onsubmit="event.preventDefault()"><div class="fgrid">
