@@ -366,7 +366,7 @@ function render(){
   let banner='';
   if(mode==='local') banner = lsOk ? `<div class="banner">Les données sont enregistrées <b>dans ce navigateur, sur cet appareil uniquement</b>. Téléchargez régulièrement une sauvegarde (Paramètres) : vider le navigateur effacerait les données.</div>` : `<div class="banner">Mode démonstration : le stockage n'est pas accessible dans cette vue, les saisies seront perdues à la fermeture de la page.</div>`;
   else if(UI.slow) banner = `<div class="banner">La base de données ne répond pas encore. Les données affichées peuvent être incomplètes.</div>`;
-  if(mode!=='loading' && !etabs().length && route()!=='parametres') banner += `<div class="banner">Aucun établissement n'est configuré. <a class="link" href="#parametres">Créez-le dans Paramètres</a> pour personnaliser le logo, l'en-tête et le pied de page des documents.</div>`;
+  if(mode!=='loading' && !etabs().length && route()!=='parametres' && estAdmin()) banner += `<div class="banner">Aucun établissement n'est configuré. <a class="link" href="#parametres">Créez-le dans Paramètres</a> pour personnaliser le logo, l'en-tête et le pied de page des documents.</div>`;
   if(curEtabId()==='*') banner += `<div class="banner" style="background:var(--accent-soft);border-color:#b5ddd3;color:#0b4f49">Vue consolidée de tous les établissements. Pour saisir une opération, choisissez un établissement dans le menu de gauche.</div>`;
   if(!canWrite) banner += `<div class="banner">Accès en lecture seule : vous pouvez consulter mais pas modifier les données.</div>`;
   const views = {tableau:vTableau, apprenants:vApprenants, paiements:vPaiements, depenses:vDepenses, formations:vFormations, rapports:vRapports, parametres:vParametres};
@@ -552,7 +552,7 @@ function vFormations(){
   return header('Formations', 'Catalogue et tarifs', `<button class="btn pri" onclick="formFormation()">+ Nouvelle formation</button>`) + `
   <div class="card">${S.formations.length ? `<div class="tbl-wrap"><table><thead><tr><th>Formation</th><th>Durée</th><th class="num">Inscription</th><th class="num">Mensualité</th><th class="num">Scolarité</th><th class="num">Coût total</th><th class="num">Inscrits</th><th class="num">Encaissé</th><th class="num">Reste</th><th></th></tr></thead><tbody>
     ${[...S.formations].sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(f=>{ const ap=S.apprenants.filter(a=>a.formationId===f.id && a.statut!=='abandon');
-      return `<tr><td><b>${esc(f.nom)}</b>${f.description?`<div class="muted small">${esc(f.description)}</div>`:''}</td><td>${esc(f.duree||'—')}</td>
+      return `<tr><td><b>${esc(f.nom)}</b> <span class="pill p-acc">${esc(sigleFormation(f))}</span>${f.description?`<div class="muted small">${esc(f.description)}</div>`:''}</td><td>${esc(f.duree||'—')}</td>
       <td class="num">${money(f.fraisInscription)}</td><td class="num">${mensualiteOf(f)?money(mensualiteOf(f))+' × '+(+f.mensualites||0):'—'}</td><td class="num">${money(scolarite(f))}</td><td class="num" style="font-weight:600">${money(coutFormation(f))}</td>
       <td class="num">${ap.length}</td><td class="num" style="color:var(--in)">${money(sum(ap,montantPaye))}</td><td class="num" style="color:var(--out)">${money(sum(ap,reste))}</td>
       <td style="text-align:right"><button class="btn sm ghost" onclick="formFormation('${f.id}')">Modifier</button></td></tr>`; }).join('')}
@@ -624,6 +624,7 @@ function lastMonth(){ const d=new Date(); const a=new Date(d.getFullYear(),d.get
   const f=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; return [f(a),f(b)]; }
 
 /* ---------- Paramètres ---------- */
+const estAdmin = () => mode!=='sb' || SB.role==='admin';
 function vParametres(){
   const cur=curEtabId();
   const cards = etabs().map(e=>{ const m=x=>etabIdOf(x)===e.id; const nA=RAW.apprenants.filter(m).length, nP=RAW.paiements.filter(m).length; const col=e.couleur||'#0f766e';
@@ -632,15 +633,15 @@ function vParametres(){
         <div style="min-width:0"><div style="font-weight:800;font-size:15px">${esc(e.nom)}</div><div class="muted small">${e.code?`<span class="pill p-acc">${esc(codeEtab(e))}</span> `:''}${cur===e.id?'<span class="pill p-ok">Ouvert</span>':''}</div></div></div>
       <div class="muted small" style="min-height:34px">${esc([e.adresse,e.telephone].filter(Boolean).join(' · ')||'Coordonnées non renseignées')}</div>
       <div class="small" style="margin:8px 0 12px">${nA} apprenant(s) · ${nP} encaissement(s)</div>
-      <div class="row"><button class="btn sm pri" onclick="formEtab('${e.id}')">Modifier l'en-tête et le logo</button>${cur!==e.id?`<button class="btn sm" onclick="setEtab('${e.id}');location.hash='tableau'">Ouvrir</button>`:''}</div></div>`; }).join('');
-  return header('Paramètres', 'Établissements, logos, en-têtes et pieds de page des documents', `<button class="btn pri" onclick="formEtab()">+ Nouvel établissement</button>`) + `
-  ${etabs().length ? `<div class="etab-cards">${cards}</div>` : `<div class="card"><div class="empty"><b>Aucun établissement configuré</b>Créez votre établissement pour ajouter son logo, son en-tête et son pied de page sur les reçus, situations et rapports.<br><br><button class="btn pri" onclick="formEtab()">+ Créer l'établissement</button></div></div>`}
+      <div class="row">${estAdmin()?`<button class="btn sm pri" onclick="formEtab('${e.id}')">Modifier l'en-tête et le logo</button>`:''}${cur!==e.id?`<button class="btn sm" onclick="setEtab('${e.id}');location.hash='tableau'">Ouvrir</button>`:''}</div></div>`; }).join('');
+  return header('Paramètres', estAdmin()?'Établissements, logos, en-têtes et pieds de page des documents':'Établissements', estAdmin()?`<button class="btn pri" onclick="formEtab()">+ Nouvel établissement</button>`:'') + `
+  ${etabs().length ? `<div class="etab-cards">${cards}</div>` : `<div class="card"><div class="empty"><b>Aucun établissement configuré</b>Créez votre établissement pour ajouter son logo, son en-tête et son pied de page sur les reçus, situations et rapports.${estAdmin()?`<br><br><button class="btn pri" onclick="formEtab()">+ Créer l'établissement</button>`:'<br><br>Seul un administrateur peut créer un établissement.'}</div></div>`}
   ${mode==='sb' && SB.role==='admin' ? vUtilisateurs() : ''}
   <div class="card" style="max-width:640px;margin-top:16px"><h3>Sauvegarde</h3>
     <p class="muted" style="margin-top:0">Téléchargez une copie complète de toutes les données (établissements, formations, apprenants, encaissements, dépenses) au format JSON.</p>
     <div class="row"><button class="btn" onclick="exportJSON()">Télécharger la sauvegarde</button>
-    <label class="btn" style="cursor:pointer">Importer une sauvegarde<input type="file" accept=".json,application/json" style="display:none" onchange="importJSON(this)"></label></div>
-    <p class="muted small" style="margin-bottom:0">L'import ajoute ou met à jour les éléments de la sauvegarde (même identifiant), sans supprimer les autres. Utile pour transférer les données d'une version à l'autre.</p></div>`;
+    ${estAdmin()?`<label class="btn" style="cursor:pointer">Importer une sauvegarde<input type="file" accept=".json,application/json" style="display:none" onchange="importJSON(this)"></label>`:''}</div>
+    ${estAdmin()?`<p class="muted small" style="margin-bottom:0">L'import ajoute ou met à jour les éléments de la sauvegarde (même identifiant), sans supprimer les autres. Utile pour transférer les données d'une version à l'autre.</p>`:''}</div>`;
 }
 
 /* Établissement : formulaire, logo, aperçu */
@@ -652,7 +653,7 @@ function formEtab(id){
   const e=base;
   openModal(id?'Modifier l\'établissement':'Nouvel établissement', `<form id="fm" onsubmit="event.preventDefault()" oninput="majApercu()"><div class="fgrid">
     <label class="f full">Nom de l'établissement *<input class="input" name="nom" required value="${esc(e.nom)}" placeholder="Ex. : ÉCOLE DE FORMATION EN SANTÉ"></label>
-    <label class="f">Sigle / code (numéros de reçu)<input class="input" name="code" value="${esc(e.code)}" maxlength="10" placeholder="Ex. : EFS → REC-EFS-2026-0001"></label>
+    <label class="f">Sigle / code (numéros de reçu)<input class="input" name="code" value="${esc(e.code)}" maxlength="10" placeholder="Ex. : ESBD → ESBD_AMR_0001"></label>
     <label class="f">Couleur des documents<input class="input" type="color" name="couleur" value="${esc(e.couleur||'#0f766e')}" style="height:42px;padding:4px"></label>
     <label class="f full">Adresse<input class="input" name="adresse" value="${esc(e.adresse)}"></label>
     <label class="f">Téléphone<input class="input" name="telephone" value="${esc(e.telephone)}"></label>
@@ -680,7 +681,7 @@ function majApercu(){
         ${(d.entete||'').split('\n').filter(l=>l.trim()).map(l=>`<div class="muted" style="font-size:11.5px">${esc(l)}</div>`).join('')}
         <div class="muted" style="font-size:11.5px">${esc([d.adresse,d.telephone,d.email].filter(Boolean).join('  ·  '))}</div>
         ${d.ninea?`<div class="muted" style="font-size:11.5px">NINEA / RCCM : ${esc(d.ninea)}</div>`:''}</div></div>
-      <div style="text-align:right;white-space:nowrap"><div style="font-weight:800;font-size:13px">REÇU DE PAIEMENT</div><div style="font-family:var(--mono);font-size:11.5px">REC-${code?code+'-':''}${new Date().getFullYear()}-0001</div></div></div>
+      <div style="text-align:right;white-space:nowrap"><div style="font-weight:800;font-size:13px">REÇU DE PAIEMENT</div><div style="font-family:var(--mono);font-size:11.5px">${code||'REC'}_AMR_0001</div></div></div>
     <div style="margin:0 16px;border-top:1px solid var(--line);height:54px;display:grid;place-items:center;color:#b8b2a4;font-size:12px">… contenu du document …</div>
     <div style="margin:0 16px;padding:8px 0 10px;border-top:1px solid var(--line);text-align:center;font-size:11px;color:var(--muted);white-space:pre-line">${esc(d.pied||'(pied de page vide)')}</div></div>`;
 }
@@ -732,8 +733,9 @@ function formFormation(id){
   if(!id && !needEtab()) return;
   const f = id ? byId('formations',id) : {};
   openModal(id?'Modifier la formation':'Nouvelle formation', `<form id="fm" onsubmit="event.preventDefault()"><div class="fgrid">
-    <label class="f full">Intitulé *<input class="input" name="nom" required value="${esc(f.nom)}" placeholder="Ex. : Secrétariat bureautique"></label>
+    <label class="f full">Intitulé *<input class="input" name="nom" required value="${esc(f.nom)}" placeholder="Ex. : Aide manipulateur radio" oninput="const s=document.querySelector('#fm [name=sigle]'); if(s && s.dataset.auto==='1') s.value=initialesFormation(this.value)"></label>
     <label class="f">Durée<input class="input" name="duree" value="${esc(f.duree)}" placeholder="Ex. : 9 mois"></label>
+    <label class="f">Sigle (numéros de reçu)<input class="input" name="sigle" value="${esc(f.sigle||initialesFormation(f.nom))}" data-auto="${f.sigle?'0':'1'}" maxlength="8" placeholder="Ex. : AMR" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'');this.dataset.auto='0'"></label>
     <label class="f">Frais d'inscription (FCFA)<input class="input" type="number" min="0" name="fraisInscription" value="${esc(f.fraisInscription??0)}" oninput="majCout()"></label>
     <label class="f">Mensualité (FCFA / mois)<input class="input" type="number" min="0" name="mensualite" value="${esc(id?mensualiteOf(f):'')}" oninput="majCout()" placeholder="Ex. : 60000"></label>
     <label class="f">Nombre de mois à payer<input class="input" type="number" min="0" name="mensualites" value="${esc(f.mensualites)}" oninput="majCout()" placeholder="Ex. : 8"></label>
@@ -751,6 +753,7 @@ function majCout(){
 async function submitFormation(id){
   const fm=document.getElementById('fm'); if(!fm.reportValidity()) return;
   const d=Object.fromEntries(new FormData(fm)); ['fraisInscription','mensualite','mensualites'].forEach(k=>d[k]=+d[k]||0); d.fraisScolarite=d.mensualite*d.mensualites;
+  d.sigle=String(d.sigle||'').toUpperCase().replace(/[^A-Z0-9]/g,'')||initialesFormation(d.nom);
   if(id) d.id=id; if(await saveDoc('formations',d)!==false){ closeModal(); toast('Formation enregistrée'); }
 }
 function delFormation(id){
@@ -837,11 +840,25 @@ function ficheApprenant(id){
 
 /* Paiement */
 function codeEtab(e){ return String(e?.code||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
-function nouveauNumero(date, etabId){
-  const y=(date||today()).slice(0,4), code=codeEtab(etabById(etabId));
-  const pre=`REC-${code?code+'-':''}${y}-`;
-  const nums=RAW.paiements.map(p=>p.numero||'').filter(n=>n.startsWith(pre)).map(n=>parseInt(n.slice(pre.length))||0);
-  return pre+String((nums.length?Math.max(...nums):0)+1).padStart(4,'0');
+const MOTS_VIDES=['DE','DU','DES','D','LA','LE','LES','L','ET','EN','A','AU','AUX','POUR','SUR'];
+function initialesFormation(nom){
+  const mots=String(nom||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
+  const utiles=mots.filter(w=>!MOTS_VIDES.includes(w));
+  return (utiles.length?utiles:mots).map(w=>w[0]).join('').slice(0,8);
+}
+function sigleFormation(f){ const s=String(f?.sigle||'').toUpperCase().replace(/[^A-Z0-9]/g,''); return s || initialesFormation(f?.nom); }
+function seqNumero(n){ const m=/(\d+)$/.exec(n||''); return m?parseInt(m[1],10):0; }
+function maxSeq(etabId){ return Math.max(0,...RAW.paiements.filter(p=>etabIdOf(p)===etabId).map(p=>seqNumero(p.numero))); }
+/* N° de reçu : SIGLEÉTAB_SIGLEFORMATION_NNNN — numéro d'ordre continu sur tous les reçus de l'établissement */
+function prefixeRecu(etabId, apprenantId){
+  const code=codeEtab(etabById(etabId))||'REC';
+  const a=apprenantId?byId('apprenants',apprenantId)||RAW.apprenants.find(x=>x.id===apprenantId):null;
+  const f=a?RAW.formations.find(x=>x.id===a.formationId):null;
+  const sf=f?sigleFormation(f):'DIV';
+  return `${code}_${sf}_`;
+}
+function nouveauNumero(date, etabId, apprenantId){
+  return prefixeRecu(etabId, apprenantId)+String(maxSeq(etabId)+1).padStart(4,'0');
 }
 function formPaiement(p={}){
   if(!p.id && !p.apprenantId && !needEtab()) return;
@@ -872,7 +889,7 @@ async function submitPaiement(id){
   if(d.apprenantId){ const a=byId('apprenants',d.apprenantId); if(a) d.etablissementId=etabIdOf(a); }
   else if(!id && curEtabId()==='*'){ toast('Choisissez un établissement dans le menu de gauche pour une recette diverse.',true); return; }
   if(id){ d.id=id; d.numero=byId('paiements',id)?.numero; }
-  else { if(!d.etablissementId) d.etablissementId=curEtabId()!=='*'?curEtabId():defaultEtabId(); d.numero=nouveauNumero(d.date, d.etablissementId); }
+  else { if(!d.etablissementId) d.etablissementId=curEtabId()!=='*'?curEtabId():defaultEtabId(); d.numero=nouveauNumero(d.date, d.etablissementId, d.apprenantId); }
   const nid=await saveDoc('paiements',d);
   if(nid!==false){ toast('Encaissement enregistré'); if(!id){ const pid=nid; setTimeout(()=>recu(pid, d),60); } else closeModal(); }
 }
@@ -1258,7 +1275,8 @@ async function sbSave(col, id, out){
     if(!error){ const d={...out, id:nid}; const i=RAW[col].findIndex(x=>x.id===nid); if(i>=0) RAW[col][i]=d; else RAW[col].push(d); render(); return nid; }
     // numéro de reçu déjà pris par un autre poste : on prend le suivant
     if(error.code==='23505' && col==='paiements' && !id && out.numero){
-      const m=/^(.*-)(\d+)$/.exec(out.numero); out.numero = m ? m[1]+String(+m[2]+1).padStart(m[2].length,'0') : out.numero+'-1'; continue;
+      const m=/^(.*?)(\d+)$/.exec(out.numero); const suiv=Math.max(m?+m[2]:0, maxSeq(out.etablissementId))+1;
+      out.numero = (m?m[1]:out.numero+'_')+String(suiv).padStart(4,'0'); continue;
     }
     throw error;
   }
