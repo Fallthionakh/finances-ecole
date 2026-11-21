@@ -107,6 +107,27 @@ label.f .input{font-weight:400;font-size:14px}
 .stat-line:last-child{border:0}
 .stat-line.total{font-weight:800;font-size:15px;border-top:2px solid var(--text);margin-top:4px}
 .menu-btn{display:none}
+a.btn{text-decoration:none;color:inherit}
+.av{width:34px;height:34px;border-radius:50%;object-fit:cover;background:#e8e4da;flex:none;display:inline-grid;place-items:center;font-weight:700;font-size:12px;color:#5b6a66;overflow:hidden}
+.av.lg{width:96px;height:96px;font-size:28px}
+.who{display:flex;gap:10px;align-items:center}
+.cni-zone{display:grid;grid-template-columns:1fr 1fr 120px;gap:12px}
+.drop{border:1.5px dashed #cfc9bb;border-radius:12px;background:#fbfaf6;min-height:118px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;text-align:center;padding:8px;font-size:12.5px;color:var(--muted);position:relative;overflow:hidden}
+.drop:hover{border-color:var(--accent);color:var(--accent)}
+.drop img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.drop.round{border-radius:50%;width:110px;height:110px;min-height:0;margin:auto}
+.drop .lbl{position:relative;z-index:1;background:rgba(255,255,255,.88);padding:2px 8px;border-radius:99px;font-weight:600}
+.ocr-status{font-size:12.5px;padding:8px 12px;border-radius:10px;background:#eef6f4;color:#0b4f49;display:none}
+.ocr-status.on{display:block}
+.ocr-status.err{background:var(--out-soft);color:#7c2d0a}
+.filled{background:#e9f7ee!important;border-color:#9ad3ae!important}
+.section-t{grid-column:1/-1;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;margin-top:6px;border-bottom:1px solid var(--line);padding-bottom:4px}
+.docs-list{display:flex;flex-direction:column;gap:8px}
+.doc-item{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff}
+.doc-item .ic{width:42px;height:42px;border-radius:8px;background:#f1efe9;display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--muted);overflow:hidden;flex:none}
+.doc-item .ic img{width:100%;height:100%;object-fit:cover}
+.dossier-head{display:flex;gap:18px;align-items:center;margin-bottom:16px}
+@media (max-width:760px){.cni-zone{grid-template-columns:1fr 1fr}}
 body.ro [onclick^="formPaiement"], body.ro [onclick^="formDepense"], body.ro [onclick^="formApprenant"], body.ro [onclick^="formFormation"], body.ro [onclick^="formEtab"], body.ro [onclick^="del"], body.ro [onclick^="submit"]{display:none!important}
 .auth{position:fixed;inset:0;z-index:90;background:linear-gradient(160deg,#10221f,#1b3531 60%,#0f766e);display:grid;place-items:center;padding:20px;overflow-y:auto}
 .auth-card{background:#fff;border-radius:18px;width:100%;max-width:400px;padding:28px;box-shadow:0 30px 80px rgba(0,0,0,.35)}
@@ -378,6 +399,7 @@ function render(){
   // préserver le focus de la recherche
   const ae=document.activeElement, aid=ae&&ae.id, pos=ae&&ae.selectionStart;
   m.innerHTML = banner + views[r]();
+  hydraterImages();
   if(aid){ const el=document.getElementById(aid); if(el){ el.focus(); try{ el.setSelectionRange(pos,pos);}catch(e){} } }
 }
 function header(title, sub, actions=''){
@@ -488,7 +510,7 @@ function vApprenants(){
     ${!S.formations.length ? `<div class="empty"><b>Créez d'abord une formation</b>Les frais de chaque apprenant sont calculés à partir de sa formation.<br><br><button class="btn pri" onclick="formFormation()">+ Créer une formation</button></div>` :
     list.length ? `<div class="tbl-wrap"><table><thead><tr><th>Apprenant</th><th>Formation</th><th>Inscription</th><th class="num">Montant dû</th><th class="num">Payé</th><th class="num">Reste</th><th>Paiement</th><th></th></tr></thead><tbody>
     ${list.map(a=>{ const [sl,sc]=statutPaiement(a); const st=a.statut||'actif';
-      return `<tr><td><button class="link" onclick="ficheApprenant('${a.id}')">${esc(apprenantNom(a.id))}</button><div class="muted small">${etabTag(a)} ${esc(a.matricule||'')}${a.matricule&&a.telephone?' · ':''}${esc(a.telephone||'')}${st!=='actif'?` · <span class="pill p-mute">${st==='termine'?'Terminé':'Abandon'}</span>`:''}</div></td>
+      return `<tr><td><div class="who">${avatar(a)}<div><button class="link" onclick="ficheApprenant('${a.id}')">${esc(apprenantNom(a.id))}</button><div class="muted small">${etabTag(a)} ${esc(a.matricule||'')}${a.matricule&&a.telephone?' · ':''}${esc(a.telephone||'')}${st!=='actif'?` · <span class="pill p-mute">${st==='termine'?'Terminé':'Abandon'}</span>`:''}</div></div></div></td>
       <td>${esc(formationOf(a)?.nom||'—')}</td><td>${fdate(a.dateInscription)}</td>
       <td class="num">${money(montantDu(a))}</td><td class="num" style="color:var(--in)">${money(montantPaye(a))}</td><td class="num" style="color:${reste(a)>0?'var(--out)':'inherit'}">${money(reste(a))}</td>
       <td><span class="pill ${sc}">${sl}</span></td>
@@ -768,36 +790,201 @@ function delFormation(id){
 }
 
 /* Apprenant */
+/* ===== Inscription : pièce d'identité, photo, matricule automatique ===== */
+const SEXES=[['','—'],['M','Masculin'],['F','Féminin']];
+let INS=null; // fichiers choisis dans le formulaire : {photo, recto, verso}
+function ordresSuivants(etabId, formationId){
+  const ap=RAW.apprenants.filter(x=>etabIdOf(x)===etabId);
+  const apF=ap.filter(x=>x.formationId===formationId);
+  const ecole=Math.max(ap.length, ...ap.map(x=>+x.ordreEcole||0))+1;
+  const fil=Math.max(apF.length, ...apF.map(x=>+x.ordreFiliere||0))+1;
+  return {ecole, fil};
+}
+function matriculeAuto(etabId, formationId){
+  if(!formationId) return {matricule:'', ecole:0, fil:0};
+  const e=etabById(etabId), f=RAW.formations.find(x=>x.id===formationId);
+  const code=codeEtab(e)||initialesFormation(e?.nom)||'ECOLE';
+  const {ecole, fil}=ordresSuivants(etabId, formationId);
+  return {matricule:`${code}_${sigleFormation(f)}_${String(ecole).padStart(3,'0')}_${String(fil).padStart(3,'0')}`, ecole, fil};
+}
 function formApprenant(id){
   if(!canWrite){ toast('Accès en lecture seule : modification impossible.',true); return; }
   if(!id && !needEtab()) return;
   const a = id ? byId('apprenants',id) : {dateInscription:today(), statut:'actif'};
+  INS={id, photo:null, recto:null, verso:null};
   const fOpts = [['','— Choisir —'], ...S.formations.map(f=>[f.id, `${f.nom} (${money(coutFormation(f))})`])];
+  const enLigne = mode==='sb';
   openModal(id?'Modifier l\'apprenant':'Inscrire un apprenant', `<form id="fm" onsubmit="event.preventDefault()"><div class="fgrid">
-    <label class="f">Prénom *<input class="input" name="prenom" required value="${esc(a.prenom)}"></label>
+    <div class="section-t">Pièce d'identité et photo</div>
+    <div class="full">
+      <div class="cni-zone">
+        <label class="drop" id="dz-recto">${a.cniRecto?`<img data-path="${esc(a.cniRecto)}" alt="">`:''}<span class="lbl">Carte : recto</span><span>Photo ou scan</span><input type="file" accept="image/*" hidden onchange="choisirImage('recto',this)"></label>
+        <label class="drop" id="dz-verso">${a.cniVerso?`<img data-path="${esc(a.cniVerso)}" alt="">`:''}<span class="lbl">Carte : verso</span><span>Avec les lignes « &lt;&lt;&lt; »</span><input type="file" accept="image/*" hidden onchange="choisirImage('verso',this)"></label>
+        <label class="drop round" id="dz-photo">${a.photo?`<img data-path="${esc(a.photo)}" alt="">`:''}<span class="lbl">Photo</span><input type="file" accept="image/*" hidden onchange="choisirImage('photo',this)"></label>
+      </div>
+      <div class="ocr-status" id="ocrStatus"></div>
+      ${enLigne?'':'<p class="muted small" style="margin:6px 0 0">La lecture de la carte et l\'enregistrement des images fonctionnent dans la version en ligne (GitHub + Supabase).</p>'}
+    </div>
+    <div class="section-t">Identité</div>
+    <label class="f">Prénom(s) *<input class="input" name="prenom" required value="${esc(a.prenom)}"></label>
     <label class="f">Nom *<input class="input" name="nom" required value="${esc(a.nom)}"></label>
-    <label class="f">Matricule<input class="input" name="matricule" value="${esc(a.matricule)}" placeholder="Ex. : ESBD-2026-001"></label>
+    <label class="f">Sexe<select class="input" name="sexe">${opt(SEXES,a.sexe||'')}</select></label>
+    <label class="f">Date de naissance<input class="input" type="date" name="dateNaissance" value="${esc(a.dateNaissance)}"></label>
+    <label class="f">Lieu de naissance<input class="input" name="lieuNaissance" value="${esc(a.lieuNaissance)}"></label>
+    <label class="f">N° de la pièce d'identité<input class="input" name="numeroPiece" value="${esc(a.numeroPiece)}" placeholder="NIN ou n° de carte"></label>
+    <label class="f">Nationalité<input class="input" name="nationalite" value="${esc(a.nationalite||'')}" placeholder="Ex. : SEN"></label>
     <label class="f">Téléphone<input class="input" name="telephone" value="${esc(a.telephone)}"></label>
-    <label class="f full">Formation *<select class="input" name="formationId" required oninput="majDu()">${opt(fOpts,a.formationId)}</select></label>
+    <label class="f full">Tuteur / Contact d'urgence<input class="input" name="tuteur" value="${esc(a.tuteur)}"></label>
+    <div class="section-t">Inscription</div>
+    <label class="f full">Formation *<select class="input" name="formationId" required oninput="majDu();majMatricule()">${opt(fOpts,a.formationId)}</select></label>
+    <label class="f">Matricule<input class="input" name="matricule" value="${esc(a.matricule)}" data-auto="${id&&a.matricule?'0':'1'}" oninput="this.dataset.auto='0'" placeholder="Attribué automatiquement"></label>
     <label class="f">Date d'inscription<input class="input" type="date" name="dateInscription" value="${esc(a.dateInscription)}"></label>
     <label class="f">Statut<select class="input" name="statut">${opt([['actif','Actif'],['termine','Terminé'],['abandon','Abandon']],a.statut||'actif')}</select></label>
     <label class="f">Frais supplémentaires (FCFA)<input class="input" type="number" min="0" name="fraisAutres" value="${esc(a.fraisAutres??0)}" oninput="majDu()"></label>
     <label class="f">Remise / Bourse (FCFA)<input class="input" type="number" min="0" name="remise" value="${esc(a.remise??0)}" oninput="majDu()"></label>
-    <label class="f full">Tuteur / Contact d'urgence<input class="input" name="tuteur" value="${esc(a.tuteur)}"></label>
     <div class="full card" style="background:#faf9f6;padding:12px 14px" id="duBox"></div>
   </div></form>`,
-  `${id?`<button class="btn danger" style="margin-right:auto" onclick="delApprenant('${id}')">Supprimer</button>`:''}<button class="btn" onclick="closeModal()">Annuler</button><button class="btn pri" onclick="submitApprenant('${id||''}')">Enregistrer</button>`);
-  majDu();
+  `${id?`<button class="btn danger" style="margin-right:auto" onclick="delApprenant('${id}')">Supprimer</button>`:''}<button class="btn" onclick="closeModal()">Annuler</button><button class="btn pri" id="btnSaveApp" onclick="submitApprenant('${id||''}')">Enregistrer</button>`, true);
+  majDu(); majMatricule(); hydraterImages();
+}
+function majMatricule(){
+  const fm=document.getElementById('fm'); if(!fm) return; const m=fm.matricule;
+  if(m.dataset.auto!=='1') return;
+  const etabId = INS?.id ? etabIdOf(byId('apprenants',INS.id)) : (curEtabId()!=='*'?curEtabId():defaultEtabId());
+  m.value = matriculeAuto(etabId, fm.formationId.value).matricule;
 }
 function majDu(){
   const fm=document.getElementById('fm'); if(!fm) return; const d=Object.fromEntries(new FormData(fm));
   const v=montantDu({formationId:d.formationId, fraisAutres:d.fraisAutres, remise:d.remise});
   document.getElementById('duBox').innerHTML=`Montant total dû : <b style="font-family:var(--mono)">${moneyL(v)}</b>`;
 }
+function ocrStatus(msg, err=false){ const el=document.getElementById('ocrStatus'); if(!el) return; el.className='ocr-status on'+(err?' err':''); el.innerHTML=msg; }
+function choisirImage(type, input){
+  const f=input.files&&input.files[0]; if(!f) return;
+  if(!/^image\//.test(f.type)){ toast('Choisissez une image (photo ou scan).',true); return; }
+  INS[type]=f;
+  const z=document.getElementById('dz-'+type); const url=URL.createObjectURL(f);
+  z.querySelectorAll('img').forEach(i=>i.remove()); const im=document.createElement('img'); im.src=url; z.prepend(im);
+  if(type==='recto'||type==='verso') lireCarte(type, f);
+}
+/* ---- Lecture automatique de la carte (OCR dans le navigateur, aucune donnée envoyée) ---- */
+let tessP=null;
+function chargerTesseract(){
+  if(window.Tesseract) return Promise.resolve();
+  if(!tessP) tessP=addScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js').catch(e=>{ tessP=null; throw e; });
+  return tessP;
+}
+async function imageVersCanvas(file, cible=1800){
+  const url=URL.createObjectURL(file);
+  const img=await new Promise((ok,ko)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=ko; i.src=url; });
+  const k=cible/Math.max(img.naturalWidth,img.naturalHeight); const w=Math.round(img.naturalWidth*k), h=Math.round(img.naturalHeight*k);
+  const c=document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d'); x.drawImage(img,0,0,w,h);
+  const d=x.getImageData(0,0,w,h), p=d.data; let mn=255,mx=0;
+  for(let i=0;i<p.length;i+=4){ const g=.299*p[i]+.587*p[i+1]+.114*p[i+2]; p[i]=p[i+1]=p[i+2]=g; if(g<mn)mn=g; if(g>mx)mx=g; }
+  const r=Math.max(1,mx-mn); for(let i=0;i<p.length;i+=4){ const v=(p[i]-mn)*255/r; p[i]=p[i+1]=p[i+2]=v; }
+  x.putImageData(d,0,0); URL.revokeObjectURL(url); return c;
+}
+async function ocrTexte(canvas, lang, params){
+  const w=await Tesseract.createWorker(lang);
+  try{ if(params) await w.setParameters(params); const { data } = await w.recognize(canvas); return data.text||''; }
+  finally{ await w.terminate(); }
+}
+const versChiffres = s => s.replace(/O|Q|D/g,'0').replace(/[IL]/g,'1').replace(/Z/g,'2').replace(/S/g,'5').replace(/B/g,'8').replace(/G/g,'6').replace(/T/g,'7');
+const versLettres = s => s.replace(/0/g,'O').replace(/1/g,'I').replace(/5/g,'S').replace(/8/g,'B').replace(/2/g,'Z').replace(/6/g,'G');
+function lireMRZ(texte){
+  const lignes=texte.toUpperCase().split(/\n/).map(l=>l.replace(/\s+/g,'').replace(/[«‹(\[{]/g,'<').replace(/[^A-Z0-9<]/g,'')).filter(l=>l.length>=18);
+  let i2=-1;
+  for(let i=0;i<lignes.length;i++){ const l=lignes[i]; if(/^\d{7}[MF<]/.test(versChiffres(l.slice(0,7))+l[7])){ i2=i; break; } }
+  if(i2<0) return null;
+  const l1=lignes[i2-1]||'', l2=lignes[i2], l3=lignes[i2+1]||'';
+  const res={};
+  const dn=versChiffres(l2.slice(0,6));
+  if(/^\d{6}$/.test(dn)){ const yy=+dn.slice(0,2), mm=+dn.slice(2,4), jj=+dn.slice(4,6); const cur=new Date().getFullYear()%100;
+    if(mm>=1&&mm<=12&&jj>=1&&jj<=31) res.dateNaissance=`${yy>cur?1900+yy:2000+yy}-${dn.slice(2,4)}-${dn.slice(4,6)}`; }
+  if(l2[7]==='M'||l2[7]==='F') res.sexe=l2[7];
+  const nat=versLettres(l2.slice(15,18)).replace(/[^A-Z]/g,''); if(nat.length===3) res.nationalite=nat;
+  if(/^[IAC]/.test(l1)){ let num=l1.slice(5,14).replace(/</g,''); if(/^\d+$/.test(versChiffres(num))) num=versChiffres(num); if(num.length>=6) res.numeroCarte=num;
+    const opt=versChiffres(l1.slice(15)).replace(/[^0-9]/g,''); if(opt.length>=13) res.nin=opt.slice(0,13); }
+  if(l3.includes('<<')){ const parts=l3.replace(/<+$/,'').split('<<');
+    const nom=versLettres(parts[0]||'').replace(/</g,' ').trim(); const pre=versLettres(parts[1]||'').replace(/</g,' ').trim();
+    if(nom) res.nom=nom; if(pre) res.prenom=pre; }
+  return Object.keys(res).length?res:null;
+}
+function lireRecto(texte){
+  const res={}; const lignes=texte.split('\n').map(x=>x.trim()).filter(Boolean);
+  const plat=texte.replace(/[Oo](?=\d)|(?<=\d)[Oo]/g,'0');
+  const nin=plat.match(/(?<!\d)\d(?:[ .]?\d){12}(?!\d)/); if(nin) res.nin=nin[0].replace(/\D/g,'');
+  const d=texte.match(/(\d{2})[\/.\-](\d{2})[\/.\-]((?:19|20)\d{2})/); if(d) res.dateNaissance=`${d[3]}-${d[2]}-${d[1]}`;
+  const valeurApres=(re)=>{ for(let i=0;i<lignes.length;i++){ const m=re.exec(lignes[i]); if(m){ let v=(lignes[i].slice(m.index+m[0].length)||'').replace(/^[\s:.\-]+/,'').trim(); if(v.replace(/[^A-Za-zÀ-ÿ]/g,'').length<2) v=lignes[i+1]||''; return v; } } return ''; };
+  const propre=v=>v.replace(/\d{2}[\/.\-]\d{2}[\/.\-]\d{4}/g,'').replace(/[^A-Za-zÀ-ÿ' \-]/g,' ').replace(/\s+/g,' ').trim().toUpperCase();
+  const lieu=propre(valeurApres(/lieu\s*de\s*naissance/i)); if(lieu.length>=2) res.lieuNaissance=lieu;
+  const pre=propre(valeurApres(/pr[ée]noms?/i)); if(pre.length>=2) res.prenom=pre;
+  const nom=propre(valeurApres(/^\s*nom\b/i)); if(nom.length>=2) res.nom=nom;
+  const sx=/sexe\s*[:\-]?\s*([MF])\b/i.exec(texte); if(sx) res.sexe=sx[1].toUpperCase();
+  return res;
+}
+const LECTURE={recto:null, verso:null};
+async function lireCarte(face, file){
+  ocrStatus(`Lecture du ${face} de la carte… (la première fois, le chargement peut prendre 20 à 30 secondes)`);
+  try{
+    await chargerTesseract();
+    if(face==='verso'){
+      const c=await imageVersCanvas(file, 2000);
+      const t=await ocrTexte(c,'eng',{tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<'});
+      LECTURE.verso=lireMRZ(t);
+      if(!LECTURE.verso){ ocrStatus('Les lignes « &lt;&lt;&lt; » du verso n\'ont pas pu être lues. Reprenez une photo nette, bien à plat, sans reflet — ou remplissez les champs à la main.', true); return; }
+    } else {
+      const c=await imageVersCanvas(file, 1800);
+      LECTURE.recto=lireRecto(await ocrTexte(c,'fra'));
+    }
+    appliquerLecture();
+  }catch(e){ console.error(e); ocrStatus('Lecture automatique indisponible (connexion internet requise pour le module de lecture). Remplissez les champs à la main.', true); }
+}
+function appliquerLecture(){
+  const fm=document.getElementById('fm'); if(!fm) return;
+  const v=LECTURE.verso||{}, r=LECTURE.recto||{};
+  // Priorité aux lignes MRZ du verso (plus fiables), le recto complète (lieu de naissance, NIN)
+  const val={ nom:v.nom||r.nom, prenom:v.prenom||r.prenom, dateNaissance:v.dateNaissance||r.dateNaissance, sexe:v.sexe||r.sexe,
+    lieuNaissance:r.lieuNaissance, numeroPiece:r.nin||v.nin||v.numeroCarte, nationalite:v.nationalite };
+  const remplis=[];
+  for(const [k,x] of Object.entries(val)){ if(!x||!fm[k]) continue; fm[k].value=x; fm[k].classList.add('filled'); remplis.push(k); }
+  const noms={nom:'nom',prenom:'prénom',dateNaissance:'date de naissance',sexe:'sexe',lieuNaissance:'lieu de naissance',numeroPiece:'n° de pièce',nationalite:'nationalité'};
+  const manque=['nom','prenom','dateNaissance','lieuNaissance','numeroPiece','sexe'].filter(k=>!remplis.includes(k));
+  ocrStatus(`<b>${remplis.length} champ(s) rempli(s) depuis la carte</b> (en vert) : vérifiez-les avant d'enregistrer.${manque.length?`<br>À compléter : ${manque.map(k=>noms[k]).join(', ')}${!LECTURE.recto&&manque.includes('lieuNaissance')?' — ajoutez le recto pour le lieu de naissance':''}${!LECTURE.verso?' — ajoutez le verso pour une lecture plus fiable':''}.`:''}`);
+}
 async function submitApprenant(id){
   const fm=document.getElementById('fm'); if(!fm.reportValidity()) return;
   const d=Object.fromEntries(new FormData(fm)); d.fraisAutres=+d.fraisAutres||0; d.remise=+d.remise||0;
-  if(id) d.id=id; if(await saveDoc('apprenants',d)!==false){ closeModal(); toast('Apprenant enregistré'); }
+  const btn=document.getElementById('btnSaveApp'); btn.disabled=true; btn.textContent='Enregistrement…';
+  const nouveau=!id; const nid = id || uidLocal();
+  const etabId = id ? etabIdOf(byId('apprenants',id)) : (curEtabId()!=='*'?curEtabId():defaultEtabId());
+  if(nouveau || fm.matricule.dataset.auto==='1'){
+    const prev=id?byId('apprenants',id):null;
+    if(nouveau || !prev?.ordreEcole || prev.formationId!==d.formationId){
+      const m=matriculeAuto(etabId, d.formationId);
+      if(fm.matricule.dataset.auto==='1') d.matricule=m.matricule;
+      d.ordreEcole = nouveau ? m.ecole : (prev?.ordreEcole||m.ecole); d.ordreFiliere=m.fil;
+    }
+  }
+  if(d.matricule && RAW.apprenants.some(x=>x.id!==nid && (x.matricule||'').toUpperCase()===d.matricule.toUpperCase())){
+    toast('Ce matricule est déjà attribué à un autre apprenant.',true); btn.disabled=false; btn.textContent='Enregistrer'; return; }
+  d.id=nid;
+  const ok=await saveDoc('apprenants',d);
+  if(ok===false){ btn.disabled=false; btn.textContent='Enregistrer'; return; }
+  // Envoi des images dans le dossier de l'apprenant
+  if(mode==='sb' && (INS.photo||INS.recto||INS.verso)){
+    btn.textContent='Envoi des images…';
+    try{
+      const a=RAW.apprenants.find(x=>x.id===nid); const maj={id:nid}; const docs=[...(a.documents||[])];
+      if(INS.photo){ const m=await envoyerFichier(a, INS.photo, 'Photo d\'identité', 600); maj.photo=m.path; docs.push(m); }
+      if(INS.recto){ const m=await envoyerFichier(a, INS.recto, 'Pièce d\'identité (recto)'); maj.cniRecto=m.path; docs.push(m); }
+      if(INS.verso){ const m=await envoyerFichier(a, INS.verso, 'Pièce d\'identité (verso)'); maj.cniVerso=m.path; docs.push(m); }
+      maj.documents=docs; await saveDoc('apprenants',maj);
+    }catch(e){ toast('Apprenant enregistré, mais l\'envoi des images a échoué : '+(e.message||''),true); }
+  }
+  closeModal(); toast(nouveau?`Apprenant inscrit — matricule ${d.matricule||''}`:'Apprenant enregistré');
+  LECTURE.recto=LECTURE.verso=null;
+  if(nouveau) ficheApprenant(nid);
 }
 function delApprenant(id){
   if(S.paiements.some(p=>p.apprenantId===id)){ toast('Cet apprenant a des paiements : passez plutôt son statut à « Abandon ».',true); return; }
@@ -822,29 +1009,120 @@ function echeancier(a){
   return `<div style="margin:-4px 0 14px"><div class="small" style="margin-bottom:6px"><b>Échéancier</b> — mensualité ${money(E.m)} × ${E.n} mois · <b>${E.regles}/${E.n}</b> mois réglé(s)${E.insOk?'':' · <span style="color:var(--out)">inscription pas encore soldée</span>'}</div>
     <div style="display:grid;grid-template-columns:repeat(${Math.min(E.n,12)},1fr);gap:6px">${E.rows.map(r=>`<div title="Mois ${r.i} : ${money(r.paye)} payé sur ${money(r.du)}" class="pill ${cls[r.st]}" style="text-align:center">M${r.i}</div>`).join('')}</div></div>`;
 }
+const CAT_DOCS=['Pièce d\'identité (recto)','Pièce d\'identité (verso)','Photo d\'identité','Extrait de naissance','Diplôme / Attestation','Certificat médical','Bulletin / Relevé de notes','Engagement / Contrat','Autre'];
 function ficheApprenant(id){
-  const a=byId('apprenants',id); if(!a) return; const f=formationOf(a);
+  const a=byId('apprenants',id)||RAW.apprenants.find(x=>x.id===id); if(!a) return; const f=formationOf(a);
   const pays=S.paiements.filter(p=>p.apprenantId===id).sort((x,y)=>(x.date||'').localeCompare(y.date||''));
   const [sl,sc]=statutPaiement(a); const du=montantDu(a), p=montantPaye(a);
-  openModal(esc(apprenantNom(id)), `
-    <div class="kv" style="margin-bottom:16px">
-      <span>Formation</span><span><b>${esc(f?.nom||'—')}</b> ${f?.duree?`· ${esc(f.duree)}`:''}</span>
-      <span>Matricule</span><span>${esc(a.matricule||'—')}</span>
-      <span>Téléphone</span><span>${esc(a.telephone||'—')}</span>
-      <span>Inscription</span><span>${fdate(a.dateInscription)}</span>
-      ${a.tuteur?`<span>Tuteur</span><span>${esc(a.tuteur)}</span>`:''}
-    </div>
-    <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
-      <div class="card kpi" style="padding:12px"><div class="lbl">Dû</div><div class="val" style="font-size:17px">${money(du)}</div><div class="hint">${f?`Inscr. ${money(f.fraisInscription)} + scol. ${money(mensualiteOf(f))} × ${+f.mensualites||0}`:''}${a.fraisAutres?` + ${money(a.fraisAutres)}`:''}${a.remise?` − remise ${money(a.remise)}`:''}</div></div>
-      <div class="card kpi in" style="padding:12px"><div class="lbl">Payé</div><div class="val" style="font-size:17px">${money(p)}</div><div class="hint">${pays.length} versement(s)</div></div>
-      <div class="card kpi" style="padding:12px"><div class="lbl">Reste</div><div class="val" style="font-size:17px;color:${reste(a)>0?'var(--out)':'var(--in)'}">${money(reste(a))}</div><div class="hint"><span class="pill ${sc}">${sl}</span></div></div>
+  const docs=(a.documents||[]).slice().sort((x,y)=>(y.ajouteLe||'').localeCompare(x.ajouteLe||''));
+  const sexe={M:'Masculin',F:'Féminin'}[a.sexe]||'—';
+  openModal('Dossier de l\'apprenant', `
+    <div class="dossier-head">${avatar(a,'lg')}
+      <div style="flex:1;min-width:0"><div style="font-size:19px;font-weight:800">${esc(apprenantNom(id))}</div>
+        <div style="font-family:var(--mono);font-size:13px;margin:2px 0">${esc(a.matricule||'Sans matricule')}</div>
+        <div class="muted small">${esc(f?.nom||'—')}${f?.duree?` · ${esc(f.duree)}`:''} · inscrit le ${fdate(a.dateInscription)} · <span class="pill ${a.statut==='abandon'?'p-no':a.statut==='termine'?'p-mute':'p-ok'}">${{actif:'Actif',termine:'Terminé',abandon:'Abandon'}[a.statut||'actif']}</span></div>
+        ${mode==='sb'&&canWrite?`<label class="link small" style="cursor:pointer;margin-top:6px;display:inline-block">${a.photo?'Changer la photo':'Ajouter une photo'}<input type="file" accept="image/*" hidden onchange="changerPhoto('${id}',this)"></label>`:''}
+      </div></div>
+    <div class="grid cols2b" style="gap:16px;margin-bottom:16px">
+      <div class="card" style="padding:14px"><h3>Identité</h3><div class="kv">
+        <span>Sexe</span><span>${sexe}</span>
+        <span>Né(e) le</span><span>${fdate(a.dateNaissance)}${a.lieuNaissance?` à ${esc(a.lieuNaissance)}`:''}</span>
+        <span>N° pièce</span><span style="font-family:var(--mono);font-size:12.5px">${esc(a.numeroPiece||'—')}</span>
+        <span>Nationalité</span><span>${esc(a.nationalite||'—')}</span>
+        <span>Téléphone</span><span>${esc(a.telephone||'—')}</span>
+        <span>Tuteur</span><span>${esc(a.tuteur||'—')}</span></div></div>
+      <div class="card" style="padding:14px"><h3>Situation financière <span class="pill ${sc}">${sl}</span></h3><div class="kv">
+        <span>Montant dû</span><span class="num" style="text-align:left">${money(du)}</span>
+        <span>Payé</span><span class="num" style="text-align:left;color:var(--in)">${money(p)} <span class="muted small">(${pays.length} versement(s))</span></span>
+        <span>Reste</span><span class="num" style="text-align:left;color:${reste(a)>0?'var(--out)':'var(--in)'};font-weight:700">${money(reste(a))}</span></div></div>
     </div>
     ${echeancier(a)}
+    <div class="card" style="padding:14px;margin-bottom:16px"><h3>Documents du dossier <span class="muted small">${docs.length} fichier(s)</span></h3>
+      ${mode==='sb' ? `${canWrite?`<div class="row" style="margin-bottom:12px"><select class="input" id="catDoc" style="flex:1;min-width:180px">${opt(CAT_DOCS,'Autre')}</select>
+        <label class="btn pri" style="cursor:pointer">+ Ajouter un document<input type="file" hidden multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" onchange="ajouterDocuments('${id}',this)"></label></div>`:''}
+        ${docs.length?`<div class="docs-list">${docs.map(d=>`<div class="doc-item"><div class="ic">${/^image\//.test(d.type||'')?`<img data-path="${esc(d.path)}" alt="">`:esc((d.nom||'').split('.').pop().toUpperCase().slice(0,4)||'DOC')}</div>
+          <div style="flex:1;min-width:0"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.categorie||'Document')}</div><div class="muted small" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.nom||'')} · ${fdate((d.ajouteLe||'').slice(0,10))} · ${tailleTxt(d.taille)}</div></div>
+          <a class="btn sm" target="_blank" rel="noopener" data-href-path="${esc(d.path)}">Ouvrir</a>
+          ${canWrite?`<button class="btn sm ghost danger" onclick="supprimerDocument('${id}','${esc(d.path)}')">Supprimer</button>`:''}</div>`).join('')}</div>`
+          :'<div class="muted small">Aucun document. Ajoutez pièce d\'identité, diplômes, certificat médical…</div>'}`
+      : '<div class="muted small">Les documents et photos sont disponibles dans la version en ligne (GitHub + Supabase).</div>'}
+    </div>
     <h3 style="font-size:14px;margin:6px 0 8px">Historique des paiements</h3>
     ${pays.length?`<table><thead><tr><th>Date</th><th>N° reçu</th><th>Motif</th><th>Mode</th><th class="num">Montant</th><th></th></tr></thead><tbody>${pays.map(x=>`<tr><td>${fdate(x.date)}</td><td style="font-family:var(--mono);font-size:12px">${esc(x.numero)}</td><td>${esc(x.motif)}</td><td>${esc(x.mode)}</td><td class="num">${money(x.montant)}</td><td><button class="btn sm" onclick="recu('${x.id}')">Reçu</button></td></tr>`).join('')}</tbody></table>`:'<div class="muted">Aucun paiement enregistré.</div>'}
-  `, `<button class="btn" style="margin-right:auto" onclick="formApprenant('${id}')">Modifier</button><button class="btn" onclick="pdfSituation('${id}')">Situation (PDF)</button><button class="btn in" onclick="formPaiement({apprenantId:'${id}'})">+ Encaisser</button>`, true);
+  `, `<button class="btn" style="margin-right:auto" onclick="formApprenant('${id}')">Modifier</button><button class="btn" onclick="pdfFicheInscription('${id}')">Fiche d'inscription (PDF)</button><button class="btn" onclick="pdfSituation('${id}')">Situation (PDF)</button><button class="btn in" onclick="formPaiement({apprenantId:'${id}'})">+ Encaisser</button>`, true);
+  hydraterImages();
 }
+const tailleTxt = n => !n ? '' : n<1024*1024 ? Math.round(n/1024)+' Ko' : (n/1024/1024).toFixed(1).replace('.',',')+' Mo';
 
+/* ===== Fichiers (Supabase Storage, espace privé) ===== */
+const BUCKET='fin-dossiers';
+const URLS=new Map(); // chemin -> {url, exp}
+async function urlsSignees(paths){
+  if(mode!=='sb' || !paths.length) return {};
+  const now=Date.now(), manque=[...new Set(paths)].filter(p=>!(URLS.get(p)?.exp>now));
+  if(manque.length){ const { data } = await sb.storage.from(BUCKET).createSignedUrls(manque, 3600);
+    (data||[]).forEach(x=>{ if(x.signedUrl) URLS.set(x.path, {url:x.signedUrl, exp:now+50*60*1000}); }); }
+  const out={}; paths.forEach(p=>{ const u=URLS.get(p); if(u) out[p]=u.url; }); return out;
+}
+async function hydraterImages(){
+  if(mode!=='sb') return;
+  const imgs=[...document.querySelectorAll('img[data-path]:not([src])')], links=[...document.querySelectorAll('a[data-href-path]:not([href])')];
+  const paths=[...imgs.map(i=>i.dataset.path), ...links.map(l=>l.dataset.hrefPath)]; if(!paths.length) return;
+  try{ const u=await urlsSignees(paths); imgs.forEach(i=>{ if(u[i.dataset.path]) i.src=u[i.dataset.path]; }); links.forEach(l=>{ if(u[l.dataset.hrefPath]) l.href=u[l.dataset.hrefPath]; }); }catch(e){}
+}
+function avatar(a, taille=''){
+  const ini=((a.prenom||'')[0]||'')+((a.nom||'')[0]||'');
+  return a.photo && mode==='sb' ? `<img class="av ${taille}" data-path="${esc(a.photo)}" alt="">` : `<span class="av ${taille}">${esc(ini.toUpperCase()||'?')}</span>`;
+}
+async function compresserImage(file, max=1600, q=.85){
+  const url=URL.createObjectURL(file);
+  try{ const img=await new Promise((ok,ko)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=ko; i.src=url; });
+    const k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight)); const c=document.createElement('canvas'); c.width=Math.round(img.naturalWidth*k); c.height=Math.round(img.naturalHeight*k);
+    const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,c.width,c.height); x.drawImage(img,0,0,c.width,c.height);
+    return await new Promise(ok=>c.toBlob(ok,'image/jpeg',q)); } finally{ URL.revokeObjectURL(url); }
+}
+async function envoyerFichier(a, file, categorie, maxImg=1600){
+  if(mode!=='sb') throw new Error('Disponible uniquement dans la version en ligne');
+  let blob=file, type=file.type||'application/octet-stream', nom=file.name||'document';
+  if(/^image\//.test(type) && !/svg|gif/.test(type)){ blob=await compresserImage(file, maxImg); type='image/jpeg'; nom=nom.replace(/\.[^.]+$/,'')+'.jpg'; }
+  if(blob.size>10*1024*1024) throw new Error(`${nom} dépasse 10 Mo`);
+  const sur=nom.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.\-]+/g,'_').slice(-80);
+  const path=`${etabIdOf(a)}/${a.id}/${Date.now()}_${sur}`;
+  const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType:type, upsert:false });
+  if(error) throw error;
+  return { path, nom, type, taille:blob.size, categorie, ajouteLe:new Date().toISOString() };
+}
+async function ajouterDocuments(id, input){
+  const files=[...(input.files||[])]; input.value=''; if(!files.length) return;
+  const a=RAW.apprenants.find(x=>x.id===id); const cat=document.getElementById('catDoc')?.value||'Autre';
+  toast(`Envoi de ${files.length} fichier(s)…`);
+  const docs=[...(a.documents||[])]; const maj={id};
+  for(const f of files){ try{ const m=await envoyerFichier(a, f, cat); docs.push(m);
+      if(cat==='Pièce d\'identité (recto)') maj.cniRecto=m.path; if(cat==='Pièce d\'identité (verso)') maj.cniVerso=m.path; if(cat==='Photo d\'identité' && /^image/.test(m.type)) maj.photo=m.path; }
+    catch(e){ toast('Échec pour '+f.name+' : '+(e.message||''),true); } }
+  maj.documents=docs;
+  if(await saveDoc('apprenants',maj)!==false){ toast('Document(s) ajouté(s)'); ficheApprenant(id); }
+}
+async function changerPhoto(id, input){
+  const f=input.files&&input.files[0]; input.value=''; if(!f) return;
+  const a=RAW.apprenants.find(x=>x.id===id);
+  try{ const m=await envoyerFichier(a, f, 'Photo d\'identité', 600); await saveDoc('apprenants',{id, photo:m.path, documents:[...(a.documents||[]), m]}); toast('Photo mise à jour'); ficheApprenant(id); }
+  catch(e){ toast('Échec : '+(e.message||''),true); }
+}
+function supprimerDocument(id, path){
+  confirmBox('Supprimer ce document du dossier ? Cette action est définitive.', async()=>{
+    const a=RAW.apprenants.find(x=>x.id===id);
+    const { error } = await sb.storage.from(BUCKET).remove([path]);
+    if(error){ toast('Suppression impossible : '+error.message,true); return; }
+    const maj={id, documents:(a.documents||[]).filter(d=>d.path!==path)};
+    ['photo','cniRecto','cniVerso'].forEach(k=>{ if(a[k]===path) maj[k]=''; });
+    if(await saveDoc('apprenants',maj)!==false){ toast('Document supprimé'); setTimeout(()=>ficheApprenant(id),50); }
+  });
+}
+async function imageEnDataUrl(path){
+  const u=(await urlsSignees([path]))[path]; if(!u) return null;
+  const b=await (await fetch(u)).blob(); return await new Promise(ok=>{ const r=new FileReader(); r.onload=()=>ok(r.result); r.readAsDataURL(b); });
+}
 /* Paiement */
 function codeEtab(e){ return String(e?.code||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
 const MOTS_VIDES=['DE','DU','DES','D','LA','LE','LES','L','ET','EN','A','AU','AUX','POUR','SUR'];
@@ -1165,6 +1443,37 @@ async function pdfSituation(id){ await withPdf(async()=>{
     foot: pays.length? [['Total','','','',pmS(sum(pays,p=>p.montant))]] : undefined,
     columnStyles:{4:{halign:'right'}} });
   await savePdf(doc, `Situation_${T(apprenantNom(id)).replace(/[^\wÀ-ÿ-]+/g,'_')}.pdf`, E);
+}); }
+
+/* Fiche d'inscription d'un apprenant */
+async function pdfFicheInscription(id){ await withPdf(async()=>{
+  const a=RAW.apprenants.find(x=>x.id===id); if(!a) return; const f=RAW.formations.find(x=>x.id===a.formationId);
+  const E=etabFor(a); const doc=await newPdf(); const W=doc.internal.pageSize.getWidth();
+  let y=pdfHeader(doc,'FICHE D\'INSCRIPTION', a.matricule?`Matricule ${a.matricule}`:'', E);
+  // photo
+  let photo=null; if(a.photo && mode==='sb'){ try{ photo=await imageEnDataUrl(a.photo); }catch(e){} }
+  const px=W-15-32;
+  if(photo){ try{ doc.addImage(photo,'JPEG',px,y-2,32,40); }catch(e){} } else { doc.setDrawColor(...C.line); doc.rect(px,y-2,32,40); doc.setFontSize(7.5); doc.setTextColor(...C.mut); doc.text('Photo',px+16,y+19,{align:'center'}); }
+  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(...C.ink); doc.text(T(apprenantNom(id)),15,y+4);
+  doc.setFont('courier','bold'); doc.setFontSize(11); doc.setTextColor(...ACC); doc.text(T(a.matricule||''),15,y+11);
+  y+=46;
+  const sexe={M:'Masculin',F:'Féminin'}[a.sexe]||'';
+  y=sectionTitle(doc,y,'Identité');
+  doc.autoTable({...tblBase, startY:y+1, theme:'plain', styles:{...tblBase.styles,cellPadding:1.7,fontSize:9.5}, columnStyles:{0:{cellWidth:55,textColor:C.mut},1:{fontStyle:'bold'}},
+    body:[['Prénom(s)',T(a.prenom)],['Nom',T(a.nom)],['Sexe',sexe],['Date de naissance',fdate(a.dateNaissance)],['Lieu de naissance',T(a.lieuNaissance||'')],['N° pièce d\'identité',T(a.numeroPiece||'')],['Nationalité',T(a.nationalite||'')],['Téléphone',T(a.telephone||'')],['Tuteur / contact d\'urgence',T(a.tuteur||'')]] });
+  y=doc.lastAutoTable.finalY+8;
+  y=sectionTitle(doc,y,'Inscription');
+  doc.autoTable({...tblBase, startY:y+1, theme:'plain', styles:{...tblBase.styles,cellPadding:1.7,fontSize:9.5}, columnStyles:{0:{cellWidth:55,textColor:C.mut},1:{fontStyle:'bold'}},
+    body:[['Formation',T(f?.nom||'')],['Durée',T(f?.duree||'')],['Date d\'inscription',fdate(a.dateInscription)],
+      ['Frais d\'inscription',pm(f?.fraisInscription)],['Scolarité',mensualiteOf(f)&&f?.mensualites?`${pmS(mensualiteOf(f))} × ${f.mensualites} mois = ${pm(scolarite(f))}`:pm(scolarite(f))],
+      ...(+a.fraisAutres?[['Frais supplémentaires',pm(a.fraisAutres)]]:[]), ...(+a.remise?[['Remise / bourse','- '+pm(a.remise)]]:[]),
+      ['Montant total dû',pm(montantDu(a))],['Déjà versé',pm(montantPaye(a))],['Reste à payer',pm(reste(a))]] });
+  y=doc.lastAutoTable.finalY+8;
+  const docs=(a.documents||[]); if(docs.length){ y=sectionTitle(doc,y,'Pièces du dossier'); doc.autoTable({...tblBase, startY:y+1, head:[['Document','Fichier','Ajouté le']], body:docs.map(d=>[T(d.categorie||''),T(d.nom||''),fdate((d.ajouteLe||'').slice(0,10))])}); y=doc.lastAutoTable.finalY+8; }
+  const H=doc.internal.pageSize.getHeight(); if(y>H-40){ doc.addPage(); y=25; }
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...C.mut);
+  doc.text('Signature de l\'apprenant',15,y+8); doc.text('La direction / Cachet',W-15,y+8,{align:'right'});
+  await savePdf(doc, `Fiche_inscription_${T(a.matricule||apprenantNom(id)).replace(/[^\wÀ-ÿ-]+/g,'_')}.pdf`, E);
 }); }
 
 /* Rapport financier de la période */
