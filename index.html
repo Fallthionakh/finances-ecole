@@ -128,7 +128,7 @@ a.btn{text-decoration:none;color:inherit}
 .doc-item .ic img{width:100%;height:100%;object-fit:cover}
 .dossier-head{display:flex;gap:18px;align-items:center;margin-bottom:16px}
 @media (max-width:760px){.cni-zone{grid-template-columns:1fr 1fr}}
-body.ro [onclick^="formPaiement"], body.ro [onclick^="formDepense"], body.ro [onclick^="formApprenant"], body.ro [onclick^="formFormation"], body.ro [onclick^="formEtab"], body.ro [onclick^="del"], body.ro [onclick^="submit"]{display:none!important}
+body.ro [onclick^="formPaiement"], body.ro [onclick^="formPassage"], body.ro [onclick^="enregistrerDossier"], body.ro [onclick^="formDepense"], body.ro [onclick^="formApprenant"], body.ro [onclick^="formFormation"], body.ro [onclick^="formEtab"], body.ro [onclick^="del"], body.ro [onclick^="submit"]{display:none!important}
 .auth{position:fixed;inset:0;z-index:90;background:linear-gradient(160deg,#10221f,#1b3531 60%,#0f766e);display:grid;place-items:center;padding:20px;overflow-y:auto}
 .auth-card{background:#fff;border-radius:18px;width:100%;max-width:400px;padding:28px;box-shadow:0 30px 80px rgba(0,0,0,.35)}
 .auth-card h2{margin:6px 0 4px;font-size:20px}
@@ -269,10 +269,16 @@ function scolarite(f){ if(!f) return 0; return (f.mensualite!=null && f.mensuali
 function coutFormation(f){ return f ? (+f.fraisInscription||0)+scolarite(f) : 0; }
 function mensualiteOf(f){ if(!f) return 0; if(f.mensualite!=null && f.mensualite!=='') return +f.mensualite||0; return f.mensualites ? (+f.fraisScolarite||0)/f.mensualites : 0; }
 function formationOf(a){ return byId('formations', a.formationId); }
+const NIVEAUX=['1ère année','2e année','3e année','4e année','Formation continue'];
+function nomFormation(f){ return f ? (f.nom||'')+(f.niveau?` – ${f.niveau}`:'') : '—'; }
+const formationParId = id => RAW.formations.find(x=>x.id===id);
+/* Coût d'une inscription (classe actuelle ou passée). fraisInscription peut être écarté (ex. passage sans frais de réinscription) */
+function coutInscription(i){ const f=formationParId(i.formationId); if(!f) return 0;
+  const ins = i.sansFraisInscription ? 0 : (+f.fraisInscription||0);
+  return Math.max(0, ins + scolarite(f) + (+i.fraisAutres||0) - (+i.remise||0)); }
+function duHistorique(a){ return sum(a.historique||[], coutInscription); }
 function montantDu(a){
-  const f = formationOf(a);
-  const base = coutFormation(f);
-  return Math.max(0, base + (+a.fraisAutres||0) - (+a.remise||0));
+  return duHistorique(a) + coutInscription(a);
 }
 function montantPaye(a){ return sum(S.paiements.filter(p=>p.apprenantId===a.id), p=>p.montant); }
 function reste(a){ return Math.max(0, montantDu(a)-montantPaye(a)); }
@@ -449,7 +455,7 @@ function vTableau(){
   </div>
   <div class="grid cols2b" style="margin-top:16px">
     <div class="card"><h3>Principaux impayés <a class="link small" href="#apprenants" onclick="UI.filtreStatut='impaye'">Tout voir</a></h3>
-      ${impayes.length ? `<table><tbody>${impayes.map(a=>`<tr><td><button class="link" onclick="ficheApprenant('${a.id}')">${esc(apprenantNom(a.id))}</button><div class="muted small">${esc(formationOf(a)?.nom||'—')}</div></td><td class="num" style="color:var(--out)">${money(reste(a))}</td><td style="width:1%"><button class="btn sm" onclick="formPaiement({apprenantId:'${a.id}'})">Encaisser</button></td></tr>`).join('')}</tbody></table>`
+      ${impayes.length ? `<table><tbody>${impayes.map(a=>`<tr><td><button class="link" onclick="ficheApprenant('${a.id}')">${esc(apprenantNom(a.id))}</button><div class="muted small">${esc(nomFormation(formationOf(a))||'—')}</div></td><td class="num" style="color:var(--out)">${money(reste(a))}</td><td style="width:1%"><button class="btn sm" onclick="formPaiement({apprenantId:'${a.id}'})">Encaisser</button></td></tr>`).join('')}</tbody></table>`
         : `<div class="empty">${S.apprenants.length?'Aucun impayé. Bravo !':'Aucun apprenant inscrit pour le moment.'}</div>`}
     </div>
     <div class="card"><h3>Derniers mouvements</h3>
@@ -499,11 +505,11 @@ function vApprenants(){
   }).sort((a,b)=>(a.nom||'').localeCompare(b.nom||''));
   const tot = {du:sum(list,montantDu), p:sum(list,montantPaye), r:sum(list,reste)};
   return header('Apprenants', `${S.apprenants.length} inscrit(s) · reste à recouvrer ${money(sum(S.apprenants.filter(a=>a.statut!=='abandon'),reste))}`,
-    `<button class="btn pri" onclick="formApprenant()">+ Inscrire un apprenant</button>`) + `
+    `<button class="btn" onclick="formPassageMasse()">Passage de classe en masse</button><button class="btn pri" onclick="formApprenant()">+ Inscrire un apprenant</button>`) + `
   <div class="card">
     <div class="toolbar">
       <input id="qA" class="input search" placeholder="Rechercher (nom, téléphone, matricule)…" value="${esc(UI.q)}" oninput="UI.q=this.value;render()">
-      <select class="input" onchange="UI.filtreFormation=this.value;render()"><option value="">Toutes les formations</option>${S.formations.map(f=>`<option value="${f.id}" ${UI.filtreFormation===f.id?'selected':''}>${esc(f.nom)}</option>`).join('')}</select>
+      <select class="input" onchange="UI.filtreFormation=this.value;render()"><option value="">Toutes les formations</option>${[...S.formations].sort((x,y)=>nomFormation(x).localeCompare(nomFormation(y))).map(f=>`<option value="${f.id}" ${UI.filtreFormation===f.id?'selected':''}>${esc(nomFormation(f))}</option>`).join('')}</select>
       <select class="input" onchange="UI.filtreStatut=this.value;render()">${[['','Tous'],['impaye','Avec impayé'],['solde','Soldés'],['actif','Actifs'],['termine','Terminés'],['abandon','Abandons']].map(([k,l])=>`<option value="${k}" ${UI.filtreStatut===k?'selected':''}>${l}</option>`).join('')}</select>
       <button class="btn" onclick="exportApprenants()">Exporter CSV</button>
     </div>
@@ -511,10 +517,10 @@ function vApprenants(){
     list.length ? `<div class="tbl-wrap"><table><thead><tr><th>Apprenant</th><th>Formation</th><th>Inscription</th><th class="num">Montant dû</th><th class="num">Payé</th><th class="num">Reste</th><th>Paiement</th><th></th></tr></thead><tbody>
     ${list.map(a=>{ const [sl,sc]=statutPaiement(a); const st=a.statut||'actif';
       return `<tr><td><div class="who">${avatar(a)}<div><button class="link" onclick="ficheApprenant('${a.id}')">${esc(apprenantNom(a.id))}</button><div class="muted small">${etabTag(a)} ${esc(a.matricule||'')}${a.matricule&&a.telephone?' · ':''}${esc(a.telephone||'')}${st!=='actif'?` · <span class="pill p-mute">${st==='termine'?'Terminé':'Abandon'}</span>`:''}</div></div></div></td>
-      <td>${esc(formationOf(a)?.nom||'—')}</td><td>${fdate(a.dateInscription)}</td>
+      <td>${esc(nomFormation(formationOf(a))||'—')}</td><td>${fdate(a.dateInscription)}</td>
       <td class="num">${money(montantDu(a))}</td><td class="num" style="color:var(--in)">${money(montantPaye(a))}</td><td class="num" style="color:${reste(a)>0?'var(--out)':'inherit'}">${money(reste(a))}</td>
       <td><span class="pill ${sc}">${sl}</span></td>
-      <td style="white-space:nowrap;text-align:right"><button class="btn sm" onclick="formPaiement({apprenantId:'${a.id}'})">Encaisser</button> <button class="btn sm ghost" onclick="formApprenant('${a.id}')">Modifier</button></td></tr>`; }).join('')}
+      <td style="text-align:right;min-width:150px;padding-right:2px"><div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;padding-right:6px"><button class="btn sm" onclick="ficheApprenant('${a.id}')">Voir</button><button class="btn sm" onclick="formApprenant('${a.id}')">Modifier</button><button class="btn sm" onclick="formPassage(['${a.id}'])">Changer de classe</button></div></td></tr>`; }).join('')}
     </tbody><tfoot><tr><th colspan="3">Total (${list.length})</th><th class="num">${money(tot.du)}</th><th class="num">${money(tot.p)}</th><th class="num">${money(tot.r)}</th><th colspan="2"></th></tr></tfoot></table></div>`
     : `<div class="empty"><b>${S.apprenants.length?'Aucun résultat':'Aucun apprenant'}</b>${S.apprenants.length?'Modifiez la recherche ou les filtres.':'Inscrivez votre premier apprenant.'}</div>`}
   </div>`;
@@ -578,8 +584,8 @@ function vDepenses(){
 function vFormations(){
   return header('Formations', 'Catalogue et tarifs', `<button class="btn pri" onclick="formFormation()">+ Nouvelle formation</button>`) + `
   <div class="card">${S.formations.length ? `<div class="tbl-wrap"><table><thead><tr><th>Formation</th><th>Durée</th><th class="num">Inscription</th><th class="num">Mensualité</th><th class="num">Scolarité</th><th class="num">Coût total</th><th class="num">Inscrits</th><th class="num">Encaissé</th><th class="num">Reste</th><th></th></tr></thead><tbody>
-    ${[...S.formations].sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(f=>{ const ap=S.apprenants.filter(a=>a.formationId===f.id && a.statut!=='abandon');
-      return `<tr><td><b>${esc(f.nom)}</b> <span class="pill p-acc">${esc(sigleFormation(f))}</span>${f.description?`<div class="muted small">${esc(f.description)}</div>`:''}</td><td>${esc(f.duree||'—')}</td>
+    ${[...S.formations].sort((a,b)=>nomFormation(a).localeCompare(nomFormation(b))).map(f=>{ const ap=S.apprenants.filter(a=>a.formationId===f.id && a.statut!=='abandon');
+      return `<tr><td><b>${esc(f.nom)}</b>${f.niveau?` <span class="pill p-mute">${esc(f.niveau)}</span>`:''} <span class="pill p-acc">${esc(sigleFormation(f))}</span>${f.description?`<div class="muted small">${esc(f.description)}</div>`:''}</td><td>${esc(f.duree||'—')}</td>
       <td class="num">${money(f.fraisInscription)}</td><td class="num">${mensualiteOf(f)?money(mensualiteOf(f))+' × '+(+f.mensualites||0):'—'}</td><td class="num">${money(scolarite(f))}</td><td class="num" style="font-weight:600">${money(coutFormation(f))}</td>
       <td class="num">${ap.length}</td><td class="num" style="color:var(--in)">${money(sum(ap,montantPaye))}</td><td class="num" style="color:var(--out)">${money(sum(ap,reste))}</td>
       <td style="text-align:right"><button class="btn sm ghost" onclick="formFormation('${f.id}')">Modifier</button></td></tr>`; }).join('')}
@@ -597,7 +603,7 @@ function groupSum(arr,key){ const o={}; arr.forEach(x=>{ const k=typeof key==='f
 function vRapports(){
   const R=rapportData();
   const parMotif=groupSum(R.pays,'motif'), parMode=groupSum(R.pays,'mode'), parCat=groupSum(R.deps,'categorie');
-  const parForm=groupSum(R.pays, p=>{ const a=byId('apprenants',p.apprenantId); return a?(formationOf(a)?.nom||'Sans formation'):'Recettes diverses'; });
+  const parForm=groupSum(R.pays, p=>{ const a=byId('apprenants',p.apprenantId); return a?(nomFormation(formationOf(a))||'Sans formation'):'Recettes diverses'; });
   const journal=[...R.pays.map(p=>({date:p.date,lib:`${p.motif} — ${apprenantNom(p.apprenantId)||p.payeur||'Recette diverse'}`,ref:p.numero,in:+p.montant||0,out:0,t:p.majLe||''})),
                  ...R.deps.map(d=>({date:d.date,lib:[d.categorie, d.beneficiaire||d.description].filter(Boolean).join(' — '),ref:d.reference||'',in:0,out:+d.montant||0,t:d.majLe||''}))]
     .sort((a,b)=>a.date.localeCompare(b.date)||a.t.localeCompare(b.t));
@@ -762,6 +768,7 @@ function formFormation(id){
   const f = id ? byId('formations',id) : {};
   openModal(id?'Modifier la formation':'Nouvelle formation', `<form id="fm" onsubmit="event.preventDefault()"><div class="fgrid">
     <label class="f full">Intitulé *<input class="input" name="nom" required value="${esc(f.nom)}" placeholder="Ex. : Aide manipulateur radio" oninput="const s=document.querySelector('#fm [name=sigle]'); if(s && s.dataset.auto==='1') s.value=initialesFormation(this.value)"></label>
+    <label class="f">Niveau / classe<input class="input" name="niveau" list="niveauxList" value="${esc(f.niveau||'')}" placeholder="Ex. : 1ère année (facultatif)"><datalist id="niveauxList">${NIVEAUX.map(n=>`<option value="${n}">`).join('')}</datalist></label>
     <label class="f">Durée<input class="input" name="duree" value="${esc(f.duree)}" placeholder="Ex. : 9 mois"></label>
     <label class="f">Sigle (numéros de reçu)<input class="input" name="sigle" value="${esc(f.sigle||initialesFormation(f.nom))}" data-auto="${f.sigle?'0':'1'}" maxlength="8" placeholder="Ex. : AMR" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'');this.dataset.auto='0'"></label>
     <label class="f">Frais d'inscription (FCFA)<input class="input" type="number" min="0" name="fraisInscription" value="${esc(f.fraisInscription??0)}" oninput="majCout()"></label>
@@ -812,7 +819,7 @@ function formApprenant(id){
   if(!id && !needEtab()) return;
   const a = id ? byId('apprenants',id) : {dateInscription:today(), statut:'actif'};
   INS={id, photo:null, recto:null, verso:null};
-  const fOpts = [['','— Choisir —'], ...S.formations.map(f=>[f.id, `${f.nom} (${money(coutFormation(f))})`])];
+  const fOpts = [['','— Choisir —'], ...[...S.formations].sort((x,y)=>nomFormation(x).localeCompare(nomFormation(y))).map(f=>[f.id, `${nomFormation(f)} (${money(coutFormation(f))})`])];
   const enLigne = mode==='sb';
   openModal(id?'Modifier l\'apprenant':'Inscrire un apprenant', `<form id="fm" onsubmit="event.preventDefault()"><div class="fgrid">
     <div class="section-t">Pièce d'identité et photo</div>
@@ -992,7 +999,7 @@ function delApprenant(id){
 }
 function echeancierData(a){
   const f=formationOf(a); const m=mensualiteOf(f), n=+f?.mensualites||0; if(!f||!m||!n) return null;
-  let dispo=montantPaye(a)-(+f.fraisInscription||0)-(+a.fraisAutres||0);
+  let dispo=montantPaye(a)-duHistorique(a)-(a.sansFraisInscription?0:(+f.fraisInscription||0))-(+a.fraisAutres||0);
   const insOk = dispo>=0; dispo=Math.max(0,dispo);
   let restantScol=Math.max(0,m*n-(+a.remise||0)), rows=[], regles=0;
   for(let i=1;i<=n;i++){
@@ -1020,7 +1027,7 @@ function ficheApprenant(id){
     <div class="dossier-head">${avatar(a,'lg')}
       <div style="flex:1;min-width:0"><div style="font-size:19px;font-weight:800">${esc(apprenantNom(id))}</div>
         <div style="font-family:var(--mono);font-size:13px;margin:2px 0">${esc(a.matricule||'Sans matricule')}</div>
-        <div class="muted small">${esc(f?.nom||'—')}${f?.duree?` · ${esc(f.duree)}`:''} · inscrit le ${fdate(a.dateInscription)} · <span class="pill ${a.statut==='abandon'?'p-no':a.statut==='termine'?'p-mute':'p-ok'}">${{actif:'Actif',termine:'Terminé',abandon:'Abandon'}[a.statut||'actif']}</span></div>
+        <div class="muted small">${esc(nomFormation(f))}${f?.duree?` · ${esc(f.duree)}`:''} · inscrit le ${fdate(a.dateInscription)} · <span class="pill ${a.statut==='abandon'?'p-no':a.statut==='termine'?'p-mute':'p-ok'}">${{actif:'Actif',termine:'Terminé',abandon:'Abandon'}[a.statut||'actif']}</span></div>
         ${mode==='sb'&&canWrite?`<label class="link small" style="cursor:pointer;margin-top:6px;display:inline-block">${a.photo?'Changer la photo':'Ajouter une photo'}<input type="file" accept="image/*" hidden onchange="changerPhoto('${id}',this)"></label>`:''}
       </div></div>
     <div class="grid cols2b" style="gap:16px;margin-bottom:16px">
@@ -1037,11 +1044,14 @@ function ficheApprenant(id){
         <span>Reste</span><span class="num" style="text-align:left;color:${reste(a)>0?'var(--out)':'var(--in)'};font-weight:700">${money(reste(a))}</span></div></div>
     </div>
     ${echeancier(a)}
+    ${(a.historique||[]).length?`<div class="card" style="padding:14px;margin-bottom:16px"><h3>Parcours</h3><table><thead><tr><th>Classe</th><th>Période</th><th>Matricule</th><th>Sortie</th><th class="num">Coût</th></tr></thead><tbody>
+      ${(a.historique||[]).map(h=>`<tr><td>${esc(nomFormation(formationParId(h.formationId)))}</td><td>${fdate(h.dateInscription)} → ${fdate(h.dateFin)}</td><td style="font-family:var(--mono);font-size:12px">${esc(h.matricule||'')}</td><td>${esc(h.motifSortie||'')}</td><td class="num">${money(coutInscription(h))}</td></tr>`).join('')}
+      <tr><td><b>${esc(nomFormation(f))}</b> <span class="pill p-ok">En cours</span></td><td>depuis le ${fdate(a.dateInscription)}</td><td style="font-family:var(--mono);font-size:12px">${esc(a.matricule||'')}</td><td>${esc(a.motifInscription||'')}</td><td class="num">${money(coutInscription(a))}</td></tr></tbody></table></div>`:''}
     <div class="card" style="padding:14px;margin-bottom:16px"><h3>Documents du dossier <span class="muted small">${docs.length} fichier(s)</span></h3>
-      ${mode==='sb' ? `${canWrite?`<div class="row" style="margin-bottom:12px"><select class="input" id="catDoc" style="flex:1;min-width:180px">${opt(CAT_DOCS,'Autre')}</select>
+      ${mode==='sb' ? `${canWrite?`<div class="row" style="margin-bottom:12px"><input class="input" id="nomDoc" placeholder="Nom du document (ex. : Diplôme BFEM 2024)" style="flex:2;min-width:200px"><select class="input" id="catDoc" style="flex:1;min-width:170px">${opt(CAT_DOCS,'Autre')}</select>
         <label class="btn pri" style="cursor:pointer">+ Ajouter un document<input type="file" hidden multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" onchange="ajouterDocuments('${id}',this)"></label></div>`:''}
         ${docs.length?`<div class="docs-list">${docs.map(d=>`<div class="doc-item"><div class="ic">${/^image\//.test(d.type||'')?`<img data-path="${esc(d.path)}" alt="">`:esc((d.nom||'').split('.').pop().toUpperCase().slice(0,4)||'DOC')}</div>
-          <div style="flex:1;min-width:0"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.categorie||'Document')}</div><div class="muted small" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.nom||'')} · ${fdate((d.ajouteLe||'').slice(0,10))} · ${tailleTxt(d.taille)}</div></div>
+          <div style="flex:1;min-width:0">${canWrite?`<input class="input" data-doc-path="${esc(d.path)}" value="${esc(d.libelle||d.categorie||'Document')}" style="padding:5px 8px;font-weight:600;width:100%">`:`<div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.libelle||d.categorie||'Document')}</div>`}<div class="muted small" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.categorie||'')} · ${esc(d.nom||'')} · ${fdate((d.ajouteLe||'').slice(0,10))} · ${tailleTxt(d.taille)}</div></div>
           <a class="btn sm" target="_blank" rel="noopener" data-href-path="${esc(d.path)}">Ouvrir</a>
           ${canWrite?`<button class="btn sm ghost danger" onclick="supprimerDocument('${id}','${esc(d.path)}')">Supprimer</button>`:''}</div>`).join('')}</div>`
           :'<div class="muted small">Aucun document. Ajoutez pièce d\'identité, diplômes, certificat médical…</div>'}`
@@ -1049,8 +1059,101 @@ function ficheApprenant(id){
     </div>
     <h3 style="font-size:14px;margin:6px 0 8px">Historique des paiements</h3>
     ${pays.length?`<table><thead><tr><th>Date</th><th>N° reçu</th><th>Motif</th><th>Mode</th><th class="num">Montant</th><th></th></tr></thead><tbody>${pays.map(x=>`<tr><td>${fdate(x.date)}</td><td style="font-family:var(--mono);font-size:12px">${esc(x.numero)}</td><td>${esc(x.motif)}</td><td>${esc(x.mode)}</td><td class="num">${money(x.montant)}</td><td><button class="btn sm" onclick="recu('${x.id}')">Reçu</button></td></tr>`).join('')}</tbody></table>`:'<div class="muted">Aucun paiement enregistré.</div>'}
-  `, `<button class="btn" style="margin-right:auto" onclick="formApprenant('${id}')">Modifier</button><button class="btn" onclick="pdfFicheInscription('${id}')">Fiche d'inscription (PDF)</button><button class="btn" onclick="pdfSituation('${id}')">Situation (PDF)</button><button class="btn in" onclick="formPaiement({apprenantId:'${id}'})">+ Encaisser</button>`, true);
+  `, `<button class="btn" style="margin-right:auto" onclick="formApprenant('${id}')">Modifier</button><button class="btn" onclick="formPassage(['${id}'])">Changer de classe</button><button class="btn" onclick="pdfFicheInscription('${id}')">Fiche d'inscription (PDF)</button><button class="btn" onclick="pdfSituation('${id}')">Situation (PDF)</button>${canWrite?`<button class="btn pri" onclick="enregistrerDossier('${id}')">Enregistrer</button>`:`<button class="btn pri" onclick="closeModal()">Fermer</button>`}`, true);
   hydraterImages();
+}
+async function enregistrerDossier(id){
+  const a=RAW.apprenants.find(x=>x.id===id); if(!a){ closeModal(); return; }
+  const noms={}; document.querySelectorAll('#modalRoot [data-doc-path]').forEach(i=>noms[i.dataset.docPath]=i.value.trim());
+  let change=false; const docs=(a.documents||[]).map(d=>{ const v=noms[d.path]; if(v!==undefined && v && v!==(d.libelle||d.categorie||'Document')){ change=true; return {...d, libelle:v}; } return d; });
+  if(change){ if(await saveDoc('apprenants',{id, documents:docs})===false) return; }
+  closeModal(); toast('Dossier enregistré');
+}
+
+/* ===== Changement de classe : passage, changement de filière, redoublement (individuel ou en masse) ===== */
+const MOTIFS_PASSAGE=['Passage en classe supérieure','Changement de filière','Redoublement','Réorientation','Réintégration','Autre'];
+function filieres(){ return [...new Set(S.formations.map(f=>f.nom))].sort((a,b)=>a.localeCompare(b)); }
+function classesDe(filiere){ return S.formations.filter(f=>f.nom===filiere).sort((x,y)=>{ const ix=NIVEAUX.indexOf(x.niveau), iy=NIVEAUX.indexOf(y.niveau); return (ix<0?99:ix)-(iy<0?99:iy) || String(x.niveau||'').localeCompare(String(y.niveau||'')); }); }
+function classeSuivante(f){ if(!f) return null; const cl=classesDe(f.nom); const i=cl.findIndex(x=>x.id===f.id); return cl[i+1]||null; }
+function blocDestination(defF){
+  const fil=defF?.nom||filieres()[0]||'';
+  return `<div class="section-t">Nouvelle classe</div>
+    <label class="f">Filière *<select class="input" name="filiere" onchange="majNiveaux()">${opt(filieres(), fil)}</select></label>
+    <label class="f">Niveau / classe *<select class="input" name="formationId" onchange="majResumePassage()"></select></label>
+    <label class="f">Motif *<select class="input" name="motif" onchange="majResumePassage()">${opt(MOTIFS_PASSAGE,'Passage en classe supérieure')}</select></label>
+    <label class="f">Date d'effet<input class="input" type="date" name="date" value="${today()}"></label>
+    <label class="f full" style="flex-direction:row;align-items:center;gap:8px;font-weight:500"><input type="checkbox" name="fraisIns" checked onchange="majResumePassage()"> Facturer les frais d'inscription de la nouvelle classe</label>
+    <label class="f full" style="flex-direction:row;align-items:center;gap:8px;font-weight:500"><input type="checkbox" name="nouveauMat" checked> Attribuer un nouveau matricule si la filière change</label>
+    <div class="full card" style="background:#faf9f6;padding:12px 14px" id="resumePassage"></div>`;
+}
+function majNiveaux(defId){
+  const fm=document.getElementById('fm'); if(!fm) return;
+  const cl=classesDe(fm.filiere.value);
+  fm.formationId.innerHTML=cl.map(f=>`<option value="${f.id}" ${f.id===defId?'selected':''}>${esc(f.niveau||'Niveau unique')} — ${money(coutFormation(f))}</option>`).join('');
+  majResumePassage();
+}
+function majResumePassage(){
+  const fm=document.getElementById('fm'); if(!fm) return; const f=formationParId(fm.formationId.value); const box=document.getElementById('resumePassage');
+  if(!f){ box.innerHTML='Aucune classe pour cette filière : créez-la dans Formations (avec son niveau).'; return; }
+  const ins=fm.fraisIns.checked?(+f.fraisInscription||0):0;
+  box.innerHTML=`<b>${esc(nomFormation(f))}</b><br>Inscription : ${money(ins)}${fm.fraisIns.checked?'':' (non facturée)'} · Scolarité : ${money(mensualiteOf(f))} × ${+f.mensualites||0} mois = ${money(scolarite(f))}<br>Nouveau montant à payer pour cette classe : <b style="font-family:var(--mono)">${moneyL(ins+scolarite(f))}</b><br><span class="muted small">Ce qui reste dû sur la classe précédente est conservé et s'ajoute au solde.</span>`;
+}
+function formPassage(ids){
+  if(!canWrite){ toast('Accès en lecture seule : modification impossible.',true); return; }
+  if(!S.formations.length){ toast('Créez d\'abord les formations.',true); return; }
+  const a=RAW.apprenants.find(x=>x.id===ids[0]); const f=formationOf(a); const suiv=classeSuivante(f)||f;
+  openModal('Changer de classe', `<form id="fm" onsubmit="event.preventDefault()"><div class="fgrid">
+    <div class="full who">${avatar(a)}<div><b>${esc(apprenantNom(a.id))}</b><div class="muted small">${esc(a.matricule||'')} · classe actuelle : ${esc(nomFormation(f))}${reste(a)>0?` · <span style="color:var(--out)">reste dû ${money(reste(a))}</span>`:''}</div></div></div>
+    ${blocDestination(suiv)}
+    <label class="f">Remise / bourse sur la nouvelle classe (FCFA)<input class="input" type="number" min="0" name="remise" value="0"></label>
+  </div></form>`, `<button class="btn" onclick="closeModal()">Annuler</button><button class="btn pri" id="btnPassage" onclick="validerPassage(['${a.id}'])">Valider le changement</button>`, true);
+  majNiveaux(suiv?.id); hydraterImages();
+}
+function formPassageMasse(){
+  if(!canWrite){ toast('Accès en lecture seule : modification impossible.',true); return; }
+  if(!needEtab()) return;
+  if(!S.formations.length){ toast('Créez d\'abord les formations.',true); return; }
+  const src=S.formations.find(f=>S.apprenants.some(a=>a.formationId===f.id&&(a.statut||'actif')==='actif'))||S.formations[0];
+  openModal('Passage de classe en masse', `<form id="fm" onsubmit="event.preventDefault()"><div class="fgrid">
+    <div class="section-t">Classe de départ</div>
+    <label class="f full">Classe actuelle<select class="input" name="source" onchange="majListePassage()">${opt([...S.formations].sort((x,y)=>nomFormation(x).localeCompare(nomFormation(y))).map(f=>[f.id, `${nomFormation(f)} (${S.apprenants.filter(a=>a.formationId===f.id&&(a.statut||'actif')==='actif').length} actif(s))`]), src.id)}</select></label>
+    <div class="full" id="listePassage"></div>
+    ${blocDestination(classeSuivante(src)||src)}
+  </div></form>`, `<button class="btn" onclick="closeModal()">Annuler</button><button class="btn pri" id="btnPassage" onclick="validerPassage()">Valider le passage</button>`, true);
+  majListePassage(); majNiveaux((classeSuivante(src)||src).id);
+}
+function majListePassage(){
+  const fm=document.getElementById('fm'); const src=fm.source.value;
+  const ap=S.apprenants.filter(a=>a.formationId===src && a.statut!=='abandon').sort((x,y)=>(x.nom||'').localeCompare(y.nom||''));
+  document.getElementById('listePassage').innerHTML = ap.length ? `<div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="small"><b>${ap.length}</b> apprenant(s) — cochez ceux qui passent</span><span><button type="button" class="link small" onclick="document.querySelectorAll('#listePassage input').forEach(i=>i.checked=true)">Tout cocher</button> · <button type="button" class="link small" onclick="document.querySelectorAll('#listePassage input').forEach(i=>i.checked=false)">Tout décocher</button></span></div>
+    <div style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 10px">${ap.map(a=>`<label style="display:flex;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid #f0ede6"><input type="checkbox" value="${a.id}" ${(a.statut||'actif')==='actif'?'checked':''}><span style="flex:1">${esc(apprenantNom(a.id))} <span class="muted small">${esc(a.matricule||'')}${a.statut==='termine'?' · terminé':''}</span></span>${reste(a)>0?`<span class="small" style="color:var(--out)">reste ${money(reste(a))}</span>`:'<span class="pill p-ok">Soldé</span>'}</label>`).join('')}</div>`
+    : '<div class="muted small">Aucun apprenant dans cette classe.</div>';
+  const f=formationParId(src); const sv=classeSuivante(f); if(fm.filiere && sv){ fm.filiere.value=sv.nom; majNiveaux(sv.id); }
+}
+async function validerPassage(ids){
+  const fm=document.getElementById('fm');
+  if(!ids) ids=[...document.querySelectorAll('#listePassage input:checked')].map(i=>i.value);
+  if(!ids.length){ toast('Cochez au moins un apprenant.',true); return; }
+  const dest=formationParId(fm.formationId.value); if(!dest){ toast('Choisissez la nouvelle classe.',true); return; }
+  const motif=fm.motif.value, date=fm.date.value||today(), fraisIns=fm.fraisIns.checked, nouveauMat=fm.nouveauMat.checked, remise=+(fm.remise?.value)||0;
+  const btn=document.getElementById('btnPassage'); btn.disabled=true; btn.textContent='Enregistrement…';
+  const compteurs={}; let ok=0;
+  for(const id of ids){
+    const a=RAW.apprenants.find(x=>x.id===id); if(!a) continue;
+    if(a.formationId===dest.id && motif!=='Redoublement' && ids.length>1) continue;
+    const ancien=formationParId(a.formationId), etab=etabIdOf(a);
+    const hist=[...(a.historique||[]), {formationId:a.formationId, dateInscription:a.dateInscription, dateFin:date, fraisAutres:+a.fraisAutres||0, remise:+a.remise||0, sansFraisInscription:!!a.sansFraisInscription, matricule:a.matricule||'', motifSortie:motif}];
+    const maj={id, historique:hist, formationId:dest.id, dateInscription:date, fraisAutres:0, remise, sansFraisInscription:!fraisIns, motifInscription:motif, statut:'actif'};
+    if(nouveauMat && sigleFormation(ancien)!==sigleFormation(dest)){
+      const k=etab+'|'+dest.id; if(!compteurs[k]) compteurs[k]=matriculeAuto(etab, dest.id); else { compteurs[k].fil++; }
+      const c=compteurs[k]; const code=codeEtab(etabById(etab))||'ECOLE';
+      const oe=a.ordreEcole||+((/_(\d+)_\d+$/.exec(a.matricule||'')||[])[1])||c.ecole;
+      maj.matricule=`${code}_${sigleFormation(dest)}_${String(oe).padStart(3,'0')}_${String(c.fil).padStart(3,'0')}`; maj.ordreFiliere=c.fil;
+    }
+    if(await saveDoc('apprenants',maj)!==false) ok++;
+  }
+  closeModal(); toast(`${ok} apprenant(s) inscrit(s) en ${nomFormation(dest)}`);
+  if(ids.length===1 && ok) ficheApprenant(ids[0]);
 }
 const tailleTxt = n => !n ? '' : n<1024*1024 ? Math.round(n/1024)+' Ko' : (n/1024/1024).toFixed(1).replace('.',',')+' Mo';
 
@@ -1095,9 +1198,11 @@ async function envoyerFichier(a, file, categorie, maxImg=1600){
 async function ajouterDocuments(id, input){
   const files=[...(input.files||[])]; input.value=''; if(!files.length) return;
   const a=RAW.apprenants.find(x=>x.id===id); const cat=document.getElementById('catDoc')?.value||'Autre';
+  const nomSaisi=(document.getElementById('nomDoc')?.value||'').trim();
   toast(`Envoi de ${files.length} fichier(s)…`);
   const docs=[...(a.documents||[])]; const maj={id};
-  for(const f of files){ try{ const m=await envoyerFichier(a, f, cat); docs.push(m);
+  for(const [k,f] of files.entries()){ try{ const m=await envoyerFichier(a, f, cat);
+      m.libelle = nomSaisi ? (files.length>1?`${nomSaisi} (${k+1})`:nomSaisi) : (f.name||'').replace(/\.[^.]+$/,'') || cat; docs.push(m);
       if(cat==='Pièce d\'identité (recto)') maj.cniRecto=m.path; if(cat==='Pièce d\'identité (verso)') maj.cniVerso=m.path; if(cat==='Photo d\'identité' && /^image/.test(m.type)) maj.photo=m.path; }
     catch(e){ toast('Échec pour '+f.name+' : '+(e.message||''),true); } }
   maj.documents=docs;
@@ -1149,7 +1254,7 @@ function formPaiement(p={}){
   if(!canWrite){ toast('Accès en lecture seule : modification impossible.',true); return; }
   if(!p.id && !p.apprenantId && !needEtab()) return;
   const id=p.id; p={date:today(), mode:'Espèces', motif:'Mensualité', ...p};
-  const aOpts=[['','— Recette diverse (sans apprenant) —'], ...[...S.apprenants].sort((x,y)=>(x.nom||'').localeCompare(y.nom||'')).map(a=>[a.id, `${apprenantNom(a.id)} — ${formationOf(a)?.nom||''}${reste(a)>0?` (reste ${money(reste(a))})`:''}`])];
+  const aOpts=[['','— Recette diverse (sans apprenant) —'], ...[...S.apprenants].sort((x,y)=>(x.nom||'').localeCompare(y.nom||'')).map(a=>[a.id, `${apprenantNom(a.id)} — ${nomFormation(formationOf(a))||''}${reste(a)>0?` (reste ${money(reste(a))})`:''}`])];
   openModal(id?'Modifier l\'encaissement':'Nouvel encaissement', `<form id="fm" onsubmit="event.preventDefault()"><div class="fgrid">
     <label class="f full">Apprenant<select class="input" name="apprenantId" oninput="majPay()">${opt(aOpts,p.apprenantId)}</select></label>
     <label class="f full" id="payeurWrap">Payeur (recette diverse)<input class="input" name="payeur" value="${esc(p.payeur)}" placeholder="Ex. : Subvention, location de salle…"></label>
@@ -1218,7 +1323,7 @@ function recuHTML({p,a,f}, standalone=false){
       <div style="text-align:right"><div style="font-weight:800;letter-spacing:.05em">REÇU DE PAIEMENT</div><div style="font-family:var(--mono);font-size:13px">${esc(p.numero)}</div><div class="muted small">${fdate(p.date)}</div></div></div>
     <div class="kv">
       <span>Reçu de</span><span><b>${esc(a?apprenantNom(a.id):(p.payeur||'Recette diverse'))}</b>${a?.matricule?` (${esc(a.matricule)})`:''}</span>
-      ${f?`<span>Formation</span><span>${esc(f.nom)}</span>`:''}
+      ${f?`<span>Formation</span><span>${esc(nomFormation(f))}</span>`:''}
       <span>Motif</span><span>${esc(p.motif)}${p.note?` — ${esc(p.note)}`:''}</span>
       <span>Mode</span><span>${esc(p.mode)}${p.reference?` · réf. ${esc(p.reference)}`:''}</span>
     </div>
@@ -1237,7 +1342,7 @@ function recu(id, fallback){
 function recuTexte({p,a,f}){
   const s=etabFor(p);
   return [`${s.nom}`, `REÇU DE PAIEMENT ${p.numero} — ${fdate(p.date)}`, `Reçu de : ${a?apprenantNom(a.id):(p.payeur||'Recette diverse')}`,
-    f?`Formation : ${f.nom}`:'', `Motif : ${p.motif}${p.note?' — '+p.note:''}`, `Mode : ${p.mode}${p.reference?' (réf. '+p.reference+')':''}`,
+    f?`Formation : ${nomFormation(f)}`:'', `Motif : ${p.motif}${p.note?' — '+p.note:''}`, `Mode : ${p.mode}${p.reference?' (réf. '+p.reference+')':''}`,
     `Montant : ${moneyL(p.montant)} (${enLettres(p.montant)} francs CFA)`, a?`Reste à payer : ${moneyL(reste(a))}`:''].filter(Boolean).join('\n');
 }
 async function copyRecu(id){ const r=recuData(id); try{ await navigator.clipboard.writeText(recuTexte(r)); toast('Reçu copié'); }catch(e){ toast('Copie impossible',true); } }
@@ -1251,7 +1356,7 @@ const csvCell=v=>{ const s=String(v??''); return /[";\n]/.test(s)?'"'+s.replace(
 const toCSV=rows=>'﻿'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n');
 function exportApprenants(){
   const rows=[['Matricule','Prénom','Nom','Téléphone','Formation','Date inscription','Statut','Montant dû','Payé','Reste']];
-  S.apprenants.forEach(a=>rows.push([a.matricule,a.prenom,a.nom,a.telephone,formationOf(a)?.nom,a.dateInscription,a.statut||'actif',montantDu(a),montantPaye(a),reste(a)]));
+  S.apprenants.forEach(a=>rows.push([a.matricule,a.prenom,a.nom,a.telephone,nomFormation(formationOf(a)),a.dateInscription,a.statut||'actif',montantDu(a),montantPaye(a),reste(a)]));
   dl(`apprenants_${today()}.csv`, toCSV(rows));
 }
 function exportJournal(){
@@ -1373,7 +1478,7 @@ function recuBlock(doc, r, y0, exemplaire){
   doc.setDrawColor(...C.line); doc.setLineWidth(.3); doc.line(x,hy,R,hy);
   let y = kvPdf(doc, x, hy+7, [
     ['Reçu de', (a?apprenantNom(a.id):(p.payeur||'Recette diverse'))+(a?.matricule?`  (${a.matricule})`:''), true],
-    ...(f?[['Formation', f.nom]]:[]),
+    ...(f?[['Formation', nomFormation(f)]]:[]),
     ['Motif', p.motif+(p.note?' — '+p.note:'')],
     ['Mode de paiement', p.mode+(p.reference?'  ·  réf. '+p.reference:'')],
   ], 36, 80);
@@ -1416,10 +1521,11 @@ async function pdfSituation(id){ await withPdf(async()=>{
   const E=etabFor(a); const doc=await newPdf(); let y=pdfHeader(doc,'SITUATION FINANCIÈRE','au '+fdate(today()),E);
   y=kvPdf(doc,15,y,[
     ['Apprenant', apprenantNom(id)+(a.matricule?`  (${a.matricule})`:''), true],
-    ['Formation', f?.nom||'—'], ['Téléphone', a.telephone||'—'], ['Date d\'inscription', fdate(a.dateInscription)],
+    ['Formation', nomFormation(f)], ['Téléphone', a.telephone||'—'], ['Date d\'inscription', fdate(a.dateInscription)],
   ],40,130)+2;
   doc.autoTable({...tblBase, startY:y, head:[['Détail des frais','Montant']],
-    body:[ ['Frais d\'inscription', pmS(f?.fraisInscription)],
+    body:[ ...(duHistorique(a)?[['Classes précédentes ('+(a.historique||[]).map(h=>T(nomFormation(formationParId(h.formationId)))).join(', ')+')', pmS(duHistorique(a))]]:[]),
+      ['Frais d\'inscription'+(a.sansFraisInscription?' (non facturés)':''), pmS(a.sansFraisInscription?0:f?.fraisInscription)],
       ['Scolarité'+(mensualiteOf(f)&&f?.mensualites?` (${pmS(mensualiteOf(f))} × ${f.mensualites} mois)`:''), pmS(scolarite(f))],
       ...(+a.fraisAutres?[['Frais supplémentaires', pmS(a.fraisAutres)]]:[]),
       ...(+a.remise?[['Remise / Bourse', '- '+pmS(a.remise)]]:[]),
@@ -1464,8 +1570,9 @@ async function pdfFicheInscription(id){ await withPdf(async()=>{
   y=doc.lastAutoTable.finalY+8;
   y=sectionTitle(doc,y,'Inscription');
   doc.autoTable({...tblBase, startY:y+1, theme:'plain', styles:{...tblBase.styles,cellPadding:1.7,fontSize:9.5}, columnStyles:{0:{cellWidth:55,textColor:C.mut},1:{fontStyle:'bold'}},
-    body:[['Formation',T(f?.nom||'')],['Durée',T(f?.duree||'')],['Date d\'inscription',fdate(a.dateInscription)],
-      ['Frais d\'inscription',pm(f?.fraisInscription)],['Scolarité',mensualiteOf(f)&&f?.mensualites?`${pmS(mensualiteOf(f))} × ${f.mensualites} mois = ${pm(scolarite(f))}`:pm(scolarite(f))],
+    body:[['Formation',T(nomFormation(f))],['Durée',T(f?.duree||'')],['Date d\'inscription',fdate(a.dateInscription)],
+      ...(duHistorique(a)?[['Classes précédentes',pm(duHistorique(a))]]:[]),
+      ['Frais d\'inscription',pm(a.sansFraisInscription?0:f?.fraisInscription)],['Scolarité',mensualiteOf(f)&&f?.mensualites?`${pmS(mensualiteOf(f))} × ${f.mensualites} mois = ${pm(scolarite(f))}`:pm(scolarite(f))],
       ...(+a.fraisAutres?[['Frais supplémentaires',pm(a.fraisAutres)]]:[]), ...(+a.remise?[['Remise / bourse','- '+pm(a.remise)]]:[]),
       ['Montant total dû',pm(montantDu(a))],['Déjà versé',pm(montantPaye(a))],['Reste à payer',pm(reste(a))]] });
   y=doc.lastAutoTable.finalY+8;
@@ -1498,7 +1605,7 @@ async function pdfRapport(){ await withPdf(async()=>{
       columnStyles:{1:{halign:'right',cellWidth:45,textColor:color},2:{halign:'right',cellWidth:20}} });
     y=doc.lastAutoTable.finalY+9; };
   if(cons){ grp('Recettes par établissement', groupSum(R.pays,p=>etabById(etabIdOf(p))?.nom||'—'), R.rec, C.inn); grp('Dépenses par établissement', groupSum(R.deps,d=>etabById(etabIdOf(d))?.nom||'—'), R.dep, C.out); }
-  grp('Recettes par formation', groupSum(R.pays, p=>{ const a=byId('apprenants',p.apprenantId); return a?(formationOf(a)?.nom||'Sans formation'):'Recettes diverses'; }), R.rec, C.inn);
+  grp('Recettes par formation', groupSum(R.pays, p=>{ const a=byId('apprenants',p.apprenantId); return a?(nomFormation(formationOf(a))||'Sans formation'):'Recettes diverses'; }), R.rec, C.inn);
   grp('Recettes par motif', groupSum(R.pays,'motif'), R.rec, C.inn);
   grp('Recettes par mode de paiement', groupSum(R.pays,'mode'), R.rec, C.inn);
   grp('Dépenses par catégorie', groupSum(R.deps,'categorie'), R.dep, C.out);
@@ -1512,7 +1619,7 @@ async function pdfRapport(){ await withPdf(async()=>{
   const imp=actifs.filter(a=>reste(a)>0).sort((a,b)=>reste(b)-reste(a));
   if(imp.length){ y=sectionTitle(doc,y,`Liste des impayés (${imp.length})`);
     doc.autoTable({...tblBase, startY:y+1, head:[['Apprenant','Formation','Dû','Payé','Reste']],
-      body: imp.map(a=>[T(apprenantNom(a.id))+(a.matricule?` (${T(a.matricule)})`:''),T(formationOf(a)?.nom||'—'),pmS(montantDu(a)),pmS(montantPaye(a)),{content:pmS(reste(a)),styles:{textColor:C.out}}]),
+      body: imp.map(a=>[T(apprenantNom(a.id))+(a.matricule?` (${T(a.matricule)})`:''),T(nomFormation(formationOf(a))||'—'),pmS(montantDu(a)),pmS(montantPaye(a)),{content:pmS(reste(a)),styles:{textColor:C.out}}]),
       foot:[['Total','',pmS(sum(imp,montantDu)),pmS(sum(imp,montantPaye)),pmS(sum(imp,reste))]],
       columnStyles:{2:{halign:'right'},3:{halign:'right'},4:{halign:'right'}} });
     y=doc.lastAutoTable.finalY+9; }
