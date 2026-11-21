@@ -108,6 +108,10 @@ label.f .input{font-weight:400;font-size:14px}
 .stat-line.total{font-weight:800;font-size:15px;border-top:2px solid var(--text);margin-top:4px}
 .menu-btn{display:none}
 a.btn{text-decoration:none;color:inherit}
+.grid>.card{min-width:0}
+.kpis6{grid-template-columns:repeat(6,minmax(0,1fr))}
+@media (max-width:1100px){.kpis6{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:760px){.kpis6{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .av{width:34px;height:34px;border-radius:50%;object-fit:cover;background:#e8e4da;flex:none;display:inline-grid;place-items:center;font-weight:700;font-size:12px;color:#5b6a66;overflow:hidden}
 .av.lg{width:96px;height:96px;font-size:28px}
 .who{display:flex;gap:10px;align-items:center}
@@ -128,7 +132,7 @@ a.btn{text-decoration:none;color:inherit}
 .doc-item .ic img{width:100%;height:100%;object-fit:cover}
 .dossier-head{display:flex;gap:18px;align-items:center;margin-bottom:16px}
 @media (max-width:760px){.cni-zone{grid-template-columns:1fr 1fr}}
-body.ro [onclick^="formPaiement"], body.ro [onclick^="formPassage"], body.ro [onclick^="enregistrerDossier"], body.ro [onclick^="formDepense"], body.ro [onclick^="formApprenant"], body.ro [onclick^="formFormation"], body.ro [onclick^="formEtab"], body.ro [onclick^="del"], body.ro [onclick^="submit"]{display:none!important}
+body.ro [onclick^="formPaiement"], body.ro [onclick^="formPassage"], body.ro [onclick^="formImport"], body.ro [onclick^="enregistrerDossier"], body.ro [onclick^="formDepense"], body.ro [onclick^="formApprenant"], body.ro [onclick^="formFormation"], body.ro [onclick^="formEtab"], body.ro [onclick^="del"], body.ro [onclick^="submit"]{display:none!important}
 .auth{position:fixed;inset:0;z-index:90;background:linear-gradient(160deg,#10221f,#1b3531 60%,#0f766e);display:grid;place-items:center;padding:20px;overflow-y:auto}
 .auth-card{background:#fff;border-radius:18px;width:100%;max-width:400px;padding:28px;box-shadow:0 30px 80px rgba(0,0,0,.35)}
 .auth-card h2{margin:6px 0 4px;font-size:20px}
@@ -365,6 +369,7 @@ async function deleteDoc(col,id){
 
 /* ================== Navigation ================== */
 const ICONS = {
+  cursus:'<path d="M12 3 1 9l11 6 9-4.9V17h2V9zM5 13.2v4L12 21l7-3.8v-4L12 17z" opacity=".35"/><path d="M4 20h4v-6H4zm6 0h4V9h-4zm6 0h4v-9h-4z"/>',
   tableau:'<path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>',
   apprenants:'<path d="M16 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h7v-2.5c0-.9.4-1.8 1.1-2.5A9.5 9.5 0 0 0 8 13zm8 0c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/>',
   paiements:'<path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15.9V19h-2v-1.1a4 4 0 0 1-3-3.4h2a2 2 0 0 0 2 1.5c1.2 0 2-.6 2-1.4s-.6-1.2-2.4-1.6C9.3 12.5 8 11.7 8 9.9a3.4 3.4 0 0 1 3-3.2V5h2v1.7a3.5 3.5 0 0 1 2.8 3.1h-2a1.7 1.7 0 0 0-1.8-1.3c-1.1 0-1.8.5-1.8 1.3s.6 1 2.4 1.5c2.2.5 3.4 1.4 3.4 3.3a3.4 3.4 0 0 1-3 3.3z"/>',
@@ -373,7 +378,7 @@ const ICONS = {
   rapports:'<path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zM9 17H7v-7h2zm4 0h-2V7h2zm4 0h-2v-4h2z"/>',
   parametres:'<path d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L11 21h4l.4-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 3.5-3.5 3.5 3.5 0 0 1-3.5 3.5z"/>'
 };
-const PAGES = [['tableau','Tableau de bord'],['apprenants','Apprenants'],['paiements','Encaissements'],['depenses','Dépenses'],['formations','Formations'],['rapports','Rapports'],['parametres','Paramètres']];
+const PAGES = [['tableau','Tableau de bord'],['apprenants','Apprenants'],['cursus','Cursus'],['paiements','Encaissements'],['depenses','Dépenses'],['formations','Formations'],['rapports','Rapports'],['parametres','Paramètres']];
 function route(){ const h=(location.hash||'').slice(1); return PAGES.some(p=>p[0]===h) ? h : 'tableau'; }
 window.addEventListener('hashchange', ()=>{ UI.q=''; document.getElementById('side').classList.remove('open'); render(); });
 
@@ -401,7 +406,7 @@ function render(){
   if(mode!=='loading' && !etabs().length && route()!=='parametres' && estAdmin()) banner += `<div class="banner">Aucun établissement n'est configuré. <a class="link" href="#parametres">Créez-le dans Paramètres</a> pour personnaliser le logo, l'en-tête et le pied de page des documents.</div>`;
   if(curEtabId()==='*') banner += `<div class="banner" style="background:var(--accent-soft);border-color:#b5ddd3;color:#0b4f49">Vue consolidée de tous les établissements. Pour saisir une opération, choisissez un établissement dans le menu de gauche.</div>`;
   if(!canWrite) banner += `<div class="banner">Accès en lecture seule : vous pouvez consulter mais pas modifier les données.</div>`;
-  const views = {tableau:vTableau, apprenants:vApprenants, paiements:vPaiements, depenses:vDepenses, formations:vFormations, rapports:vRapports, parametres:vParametres};
+  const views = {tableau:vTableau, apprenants:vApprenants, cursus:vCursus, paiements:vPaiements, depenses:vDepenses, formations:vFormations, rapports:vRapports, parametres:vParametres};
   // préserver le focus de la recherche
   const ae=document.activeElement, aid=ae&&ae.id, pos=ae&&ae.selectionStart;
   m.innerHTML = banner + views[r]();
@@ -505,7 +510,7 @@ function vApprenants(){
   }).sort((a,b)=>(a.nom||'').localeCompare(b.nom||''));
   const tot = {du:sum(list,montantDu), p:sum(list,montantPaye), r:sum(list,reste)};
   return header('Apprenants', `${S.apprenants.length} inscrit(s) · reste à recouvrer ${money(sum(S.apprenants.filter(a=>a.statut!=='abandon'),reste))}`,
-    `<button class="btn" onclick="formPassageMasse()">Passage de classe en masse</button><button class="btn pri" onclick="formApprenant()">+ Inscrire un apprenant</button>`) + `
+    `<button class="btn" onclick="formImport()">Importer une liste</button><button class="btn" onclick="formPassageMasse()">Passage de classe en masse</button><button class="btn pri" onclick="formApprenant()">+ Inscrire un apprenant</button>`) + `
   <div class="card">
     <div class="toolbar">
       <input id="qA" class="input search" placeholder="Rechercher (nom, téléphone, matricule)…" value="${esc(UI.q)}" oninput="UI.q=this.value;render()">
@@ -1044,9 +1049,7 @@ function ficheApprenant(id){
         <span>Reste</span><span class="num" style="text-align:left;color:${reste(a)>0?'var(--out)':'var(--in)'};font-weight:700">${money(reste(a))}</span></div></div>
     </div>
     ${echeancier(a)}
-    ${(a.historique||[]).length?`<div class="card" style="padding:14px;margin-bottom:16px"><h3>Parcours</h3><table><thead><tr><th>Classe</th><th>Période</th><th>Matricule</th><th>Sortie</th><th class="num">Coût</th></tr></thead><tbody>
-      ${(a.historique||[]).map(h=>`<tr><td>${esc(nomFormation(formationParId(h.formationId)))}</td><td>${fdate(h.dateInscription)} → ${fdate(h.dateFin)}</td><td style="font-family:var(--mono);font-size:12px">${esc(h.matricule||'')}</td><td>${esc(h.motifSortie||'')}</td><td class="num">${money(coutInscription(h))}</td></tr>`).join('')}
-      <tr><td><b>${esc(nomFormation(f))}</b> <span class="pill p-ok">En cours</span></td><td>depuis le ${fdate(a.dateInscription)}</td><td style="font-family:var(--mono);font-size:12px">${esc(a.matricule||'')}</td><td>${esc(a.motifInscription||'')}</td><td class="num">${money(coutInscription(a))}</td></tr></tbody></table></div>`:''}
+    ${blocCursus(a)}
     <div class="card" style="padding:14px;margin-bottom:16px"><h3>Documents du dossier <span class="muted small">${docs.length} fichier(s)</span></h3>
       ${mode==='sb' ? `${canWrite?`<div class="row" style="margin-bottom:12px"><input class="input" id="nomDoc" placeholder="Nom du document (ex. : Diplôme BFEM 2024)" style="flex:2;min-width:200px"><select class="input" id="catDoc" style="flex:1;min-width:170px">${opt(CAT_DOCS,'Autre')}</select>
         <label class="btn pri" style="cursor:pointer">+ Ajouter un document<input type="file" hidden multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" onchange="ajouterDocuments('${id}',this)"></label></div>`:''}
@@ -1156,6 +1159,195 @@ async function validerPassage(ids){
   if(ids.length===1 && ok) ficheApprenant(ids[0]);
 }
 const tailleTxt = n => !n ? '' : n<1024*1024 ? Math.round(n/1024)+' Ko' : (n/1024/1024).toFixed(1).replace('.',',')+' Mo';
+
+
+/* ===== Cursus : années scolaires, passages, redoublements, changements de filière ===== */
+function anneeScolaire(d){ if(!d) return 'Sans date'; const y=+d.slice(0,4), m=+d.slice(5,7); const s=m>=9?y:y-1; return `${s}-${s+1}`; }
+const TYPES_ENTREE={ 'Inscription':'p-acc', 'Passage en classe supérieure':'p-ok', 'Redoublement':'p-part', 'Changement de filière':'p-mute', 'Réorientation':'p-mute', 'Réintégration':'p-acc', 'Autre':'p-mute' };
+function cursusEntries(a){
+  const h=a.historique||[];
+  const all=[...h.map(x=>({...x, enCours:false})), {formationId:a.formationId, dateInscription:a.dateInscription, dateFin:'', matricule:a.matricule, fraisAutres:a.fraisAutres, remise:a.remise, sansFraisInscription:a.sansFraisInscription, enCours:true, statut:a.statut||'actif'}];
+  return all.map((e,i)=>{
+    let entree = i===0 ? 'Inscription' : (h[i-1]?.motifSortie || 'Passage en classe supérieure');
+    if(i>0 && all[i-1].formationId===e.formationId) entree='Redoublement';
+    const sortie = e.enCours ? ({actif:'En cours',termine:'Terminé',abandon:'Abandon'}[e.statut]||'En cours') : (h[i]?.motifSortie||'');
+    return {...e, annee:anneeScolaire(e.dateInscription), entree, sortie, f:formationParId(e.formationId)};
+  });
+}
+function statsCursus(a){ const c=cursusEntries(a); return { annees:new Set(c.map(e=>e.annee)).size, redoublements:c.filter(e=>e.entree==='Redoublement').length, changements:c.filter(e=>['Changement de filière','Réorientation'].includes(e.entree)).length, passages:c.filter(e=>e.entree==='Passage en classe supérieure').length }; }
+function blocCursus(a){
+  const c=cursusEntries(a), st=statsCursus(a);
+  return `<div class="card" style="padding:14px;margin-bottom:16px"><h3>Cursus <span class="row" style="gap:6px"><span class="pill p-acc">${c.length} classe(s) · ${st.annees} année(s)</span>${st.passages?`<span class="pill p-ok">${st.passages} passage(s)</span>`:''}${st.redoublements?`<span class="pill p-part">${st.redoublements} redoublement(s)</span>`:''}${st.changements?`<span class="pill p-mute">${st.changements} changement(s) de filière</span>`:''}</span></h3>
+    <div class="tbl-wrap"><table><thead><tr><th>Année scolaire</th><th>Classe</th><th>Entrée</th><th>Période</th><th>Matricule</th><th>Sortie</th><th class="num">Coût</th></tr></thead><tbody>
+    ${c.map(e=>`<tr><td><b>${esc(e.annee||'—')}</b></td><td>${esc(nomFormation(e.f))}</td><td><span class="pill ${TYPES_ENTREE[e.entree]||'p-mute'}">${esc(e.entree)}</span></td><td class="small">${fdate(e.dateInscription)} → ${e.enCours?'…':fdate(e.dateFin)}</td><td style="font-family:var(--mono);font-size:12px">${esc(e.matricule||'')}</td><td>${e.enCours?`<span class="pill ${e.statut==='abandon'?'p-no':e.statut==='termine'?'p-mute':'p-ok'}">${esc(e.sortie)}</span>`:esc(e.sortie)}</td><td class="num">${money(coutInscription(e))}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+function vCursus(){
+  const all=S.apprenants.flatMap(a=>cursusEntries(a).map(e=>({...e, a})));
+  const annees=[...new Set(all.map(e=>e.annee).filter(Boolean))].sort().reverse();
+  if(UI.cAnnee===undefined || (UI.cAnnee!=='*' && !annees.includes(UI.cAnnee))) UI.cAnnee=annees[0]||'*';
+  const q=(UI.q||'').toLowerCase();
+  const ents=all.filter(e=>(UI.cAnnee==='*'||e.annee===UI.cAnnee) && (!UI.cClasse||e.formationId===UI.cClasse));
+  const ids=[...new Set(ents.map(e=>e.a.id))];
+  const k={ effectif:ids.length, nouveaux:ents.filter(e=>e.entree==='Inscription').length, passages:ents.filter(e=>e.entree==='Passage en classe supérieure').length,
+    redoubl:ents.filter(e=>e.entree==='Redoublement').length, chgt:ents.filter(e=>['Changement de filière','Réorientation'].includes(e.entree)).length, aband:ents.filter(e=>e.enCours&&e.statut==='abandon').length };
+  // par classe
+  const pc={}; ents.forEach(e=>{ const x=pc[e.formationId]||(pc[e.formationId]={f:e.f, eff:0, nouv:0, pass:0, red:0, chg:0, sortis:0, aband:0, term:0});
+    x.eff++; if(e.entree==='Inscription')x.nouv++; if(e.entree==='Passage en classe supérieure')x.pass++; if(e.entree==='Redoublement')x.red++; if(['Changement de filière','Réorientation'].includes(e.entree))x.chg++;
+    if(!e.enCours) x.sortis++; if(e.enCours&&e.statut==='abandon')x.aband++; if(e.enCours&&e.statut==='termine')x.term++; });
+  const lignes=Object.values(pc).sort((x,y)=>nomFormation(x.f).localeCompare(nomFormation(y.f)));
+  // matrice classes x années
+  const classes=[...new Set(all.map(e=>e.formationId))].map(formationParId).filter(Boolean).sort((x,y)=>nomFormation(x).localeCompare(nomFormation(y)));
+  const anAsc=[...annees].reverse();
+  const cnt=(fid,an)=>all.filter(e=>e.formationId===fid&&e.annee===an).length;
+  // apprenants
+  const liste=ids.map(id=>S.apprenants.find(a=>a.id===id)).filter(a=>!q||`${a.prenom} ${a.nom} ${a.matricule}`.toLowerCase().includes(q)).sort((x,y)=>(x.nom||'').localeCompare(y.nom||''));
+  const kpi=(l,v,c='')=>`<div class="card kpi" style="padding:14px"><div class="lbl">${l}</div><div class="val" style="font-size:20px;${c}">${v}</div></div>`;
+  return header('Cursus des apprenants', `Classes et années fréquentées, passages, redoublements et changements de filière`,
+    `<button class="btn" onclick="exportCursusCSV()">Exporter (CSV)</button><button class="btn pri" onclick="pdfCursus()">Rapport (PDF)</button>`) + `
+  <div class="card" style="margin-bottom:16px"><div class="toolbar" style="margin:0">
+    <select class="input" onchange="UI.cAnnee=this.value;render()">${annees.map(y=>`<option value="${y}" ${UI.cAnnee===y?'selected':''}>Année ${y}</option>`).join('')}<option value="*" ${UI.cAnnee==='*'?'selected':''}>Toutes les années</option></select>
+    <select class="input" onchange="UI.cClasse=this.value;render()"><option value="">Toutes les classes</option>${classes.map(f=>`<option value="${f.id}" ${UI.cClasse===f.id?'selected':''}>${esc(nomFormation(f))}</option>`).join('')}</select>
+    <input id="qC" class="input search" placeholder="Rechercher un apprenant…" value="${esc(UI.q)}" oninput="UI.q=this.value;render()">
+  </div></div>
+  <div class="grid kpis6" style="margin-bottom:16px">
+    ${kpi('Effectif',k.effectif)}${kpi('Nouveaux inscrits',k.nouveaux,'color:var(--accent)')}${kpi('Passages',k.passages,'color:var(--in)')}${kpi('Redoublements',k.redoubl,'color:var(--warn)')}${kpi('Chgts de filière',k.chgt)}${kpi('Abandons',k.aband,'color:var(--out)')}
+  </div>
+  <div class="grid cols2b" style="margin-bottom:16px">
+    <div class="card"><h3>Par classe <span class="muted small">${UI.cAnnee==='*'?'toutes années':UI.cAnnee}</span></h3>${lignes.length?`<div class="tbl-wrap"><table><thead><tr><th>Classe</th><th class="num">Effectif</th><th class="num">Nouv.</th><th class="num">Passés</th><th class="num">Redoubl.</th><th class="num">Chgt fil.</th><th class="num">Abandons</th></tr></thead><tbody>
+      ${lignes.map(x=>`<tr><td>${esc(nomFormation(x.f))}</td><td class="num"><b>${x.eff}</b></td><td class="num">${x.nouv}</td><td class="num">${x.pass}</td><td class="num">${x.red}</td><td class="num">${x.chg}</td><td class="num">${x.aband}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Aucune donnée.</div>'}</div>
+    <div class="card"><h3>Effectifs par année scolaire</h3>${classes.length&&anAsc.length?`<div class="tbl-wrap"><table><thead><tr><th>Classe</th>${anAsc.map(y=>`<th class="num">${y}</th>`).join('')}</tr></thead><tbody>
+      ${classes.map(f=>`<tr><td>${esc(nomFormation(f))}</td>${anAsc.map(y=>{ const n=cnt(f.id,y); return `<td class="num" style="${n?'font-weight:700':'color:#c9c3b6'}">${n||'·'}</td>`; }).join('')}</tr>`).join('')}
+      <tr><th>Total</th>${anAsc.map(y=>`<th class="num">${all.filter(e=>e.annee===y).length}</th>`).join('')}</tr></tbody></table></div>`:'<div class="empty">Aucune donnée.</div>'}</div>
+  </div>
+  <div class="card"><h3>Cursus individuels <span class="muted small">${liste.length} apprenant(s)</span></h3>
+    ${liste.length?`<div class="tbl-wrap"><table><thead><tr><th>Apprenant</th><th>Parcours</th><th class="num">Années</th><th class="num">Redoubl.</th><th>Statut</th><th></th></tr></thead><tbody>
+    ${liste.map(a=>{ const c=cursusEntries(a), st=statsCursus(a); return `<tr><td><div class="who">${avatar(a)}<div><b>${esc(apprenantNom(a.id))}</b><div class="muted small">${esc(a.matricule||'')}</div></div></div></td>
+      <td><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">${c.map((e,i)=>`${i?'<span class="muted">→</span>':''}<span class="pill ${TYPES_ENTREE[e.entree]||'p-mute'}" title="${esc(e.entree)}">${esc(e.annee)} · ${esc(e.f?.sigle||sigleFormation(e.f))}${e.f?.niveau?' '+esc(e.f.niveau):''}${e.entree==='Redoublement'?' (R)':''}</span>`).join('')}</div></td>
+      <td class="num">${st.annees}</td><td class="num" style="${st.redoublements?'color:var(--warn);font-weight:700':''}">${st.redoublements}</td>
+      <td><span class="pill ${a.statut==='abandon'?'p-no':a.statut==='termine'?'p-mute':'p-ok'}">${{actif:'Actif',termine:'Terminé',abandon:'Abandon'}[a.statut||'actif']}</span></td>
+      <td style="text-align:right"><button class="btn sm" onclick="ficheApprenant('${a.id}')">Voir</button></td></tr>`; }).join('')}</tbody></table></div>`:'<div class="empty">Aucun apprenant pour ces critères.</div>'}
+    <p class="muted small" style="margin-bottom:0">Couleurs : <span class="pill p-acc">Inscription</span> <span class="pill p-ok">Passage</span> <span class="pill p-part">Redoublement (R)</span> <span class="pill p-mute">Changement de filière</span></p>
+  </div>`;
+}
+function lignesCursusExport(){
+  return S.apprenants.flatMap(a=>cursusEntries(a).map(e=>({a,e}))).filter(({e})=>(UI.cAnnee==='*'||!UI.cAnnee||e.annee===UI.cAnnee)&&(!UI.cClasse||e.formationId===UI.cClasse))
+    .sort((x,y)=>(x.a.nom||'').localeCompare(y.a.nom||'')||(x.e.dateInscription||'').localeCompare(y.e.dateInscription||''));
+}
+function exportCursusCSV(){
+  const rows=[['Matricule','Prénom','Nom','Année scolaire','Classe','Entrée','Début','Fin','Sortie / statut']];
+  lignesCursusExport().forEach(({a,e})=>rows.push([e.matricule||a.matricule,a.prenom,a.nom,e.annee,nomFormation(e.f),e.entree,e.dateInscription,e.dateFin,e.sortie]));
+  dl(`cursus_${UI.cAnnee==='*'?'toutes_annees':UI.cAnnee||''}.csv`, toCSV(rows));
+}
+async function pdfCursus(){ await withPdf(async()=>{
+  const E=curEtab()||etabById(defaultEtabId())||etabFallback(); const doc=await newPdf();
+  let y=pdfHeader(doc,'CURSUS DES APPRENANTS',`${UI.cAnnee==='*'?'Toutes les années':'Année scolaire '+UI.cAnnee}${UI.cClasse?' — '+nomFormation(formationParId(UI.cClasse)):''}`,E);
+  const L=lignesCursusExport();
+  const pc={}; L.forEach(({e})=>{ const x=pc[e.formationId]||(pc[e.formationId]={f:e.f,eff:0,nouv:0,pass:0,red:0,chg:0,ab:0}); x.eff++; if(e.entree==='Inscription')x.nouv++; if(e.entree==='Passage en classe supérieure')x.pass++; if(e.entree==='Redoublement')x.red++; if(['Changement de filière','Réorientation'].includes(e.entree))x.chg++; if(e.enCours&&e.statut==='abandon')x.ab++; });
+  y=sectionTitle(doc,y,'Effectifs par classe');
+  doc.autoTable({...tblBase, startY:y+1, head:[['Classe','Effectif','Nouveaux','Passages','Redoublements','Chgts filière','Abandons']],
+    body:Object.values(pc).map(x=>[T(nomFormation(x.f)),x.eff,x.nouv,x.pass,x.red,x.chg,x.ab]), columnStyles:{1:{halign:'right'},2:{halign:'right'},3:{halign:'right'},4:{halign:'right'},5:{halign:'right'},6:{halign:'right'}} });
+  y=doc.lastAutoTable.finalY+9; y=sectionTitle(doc,y,'Détail des cursus');
+  doc.autoTable({...tblBase, startY:y+1, styles:{...tblBase.styles,fontSize:8}, head:[['Matricule','Apprenant','Année','Classe','Entrée','Sortie / statut']],
+    body:L.map(({a,e})=>[T(e.matricule||a.matricule||''),T(apprenantNom(a.id)),e.annee,T(nomFormation(e.f)),T(e.entree),T(e.sortie)]) });
+  await savePdf(doc, `Cursus_${UI.cAnnee==='*'?'toutes_annees':UI.cAnnee}.pdf`, E);
+}); }
+
+/* ===== Import d'une liste de classe (Excel ou CSV) ===== */
+let xlsxP=null;
+function chargerXLSX(){ if(window.XLSX) return Promise.resolve(); if(!xlsxP) xlsxP=addScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js').catch(e=>{ xlsxP=null; throw e; }); return xlsxP; }
+const CHAMPS_IMPORT={
+  prenom:['prenom','prenoms','firstname'], nom:['nom','nomdefamille','lastname','name'], nomComplet:['nomcomplet','prenometnom','prenomnom','nometprenom','nomprenom','nomsetprenoms','prenomsetnom','apprenant','eleve','etudiant'],
+  sexe:['sexe','genre','sex'], dateNaissance:['datedenaissance','datenaissance','naissance','neele','nele','dn','datenais'], lieuNaissance:['lieudenaissance','lieunaissance','lieu','nea','neea'],
+  numeroPiece:['cni','nin','numeropiece','npiece','ndepiece','numerocni','ncni','piece','numerodelapiece','pieceidentite','numeroidentite'], telephone:['telephone','tel','contact','portable','mobile','numerodetelephone'],
+  tuteur:['tuteur','parent','contacturgence','personneacontacter','telephonetuteur'], matricule:['matricule','mat','numeromatricule'], nationalite:['nationalite'], dateInscription:['dateinscription','datedinscription','inscription']
+};
+const normEntete = h => String(h||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+function versDateISO(v){
+  if(v instanceof Date && !isNaN(v)){ const t=Math.round((v.getTime()-v.getTimezoneOffset()*60000)/86400000)*86400000; return new Date(t).toISOString().slice(0,10); }
+  if(typeof v==='number' && v>10000 && v<80000){ const d=new Date(Math.round((v-25569)*86400000)); return d.toISOString().slice(0,10); }
+  const s=String(v||'').trim(); let m=/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/.exec(s);
+  if(m){ let y=+m[3]; if(y<100) y+= y>(new Date().getFullYear()%100)?1900:2000; return `${y}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`; }
+  m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s); if(m) return `${m[1]}-${m[2]}-${m[3]}`; return '';
+}
+function versSexe(v){ const s=normEntete(v); if(['m','masculin','homme','h','garcon','male'].includes(s)) return 'M'; if(['f','feminin','femme','fille','female'].includes(s)) return 'F'; return ''; }
+let IMPORT=null;
+function formImport(){
+  if(!canWrite){ toast('Accès en lecture seule : modification impossible.',true); return; }
+  if(!needEtab()) return;
+  if(!S.formations.length){ toast('Créez d\'abord les formations.',true); return; }
+  IMPORT={rows:[]};
+  openModal('Importer une liste de classe', `<form id="fm" onsubmit="event.preventDefault()"><div class="fgrid">
+    <label class="f full">Classe d'inscription *<select class="input" name="formationId" onchange="analyserImport()">${opt([...S.formations].sort((x,y)=>nomFormation(x).localeCompare(nomFormation(y))).map(f=>[f.id,nomFormation(f)]))}</select></label>
+    <label class="f">Date d'inscription (si absente du fichier)<input class="input" type="date" name="dateInscription" value="${today()}" onchange="analyserImport()"></label>
+    <label class="f" style="flex-direction:row;align-items:center;gap:8px;font-weight:500;margin-top:22px"><input type="checkbox" name="autoMat" checked onchange="analyserImport()"> Attribuer les matricules manquants</label>
+    <div class="full"><label class="drop" style="min-height:90px"><span class="lbl">Choisir le fichier Excel (.xlsx, .xls) ou CSV</span><span id="nomFichierImport">La 1re ligne doit contenir les titres des colonnes</span><input type="file" hidden accept=".xlsx,.xls,.csv,.ods" onchange="lireFichierImport(this)"></label>
+      <p class="muted small" style="margin:6px 0 0">Colonnes reconnues : Prénom, Nom (ou « Prénom et nom »), Sexe, Date de naissance, Lieu de naissance, N° CNI / NIN, Téléphone, Tuteur, Matricule, Nationalité, Date d'inscription. <button type="button" class="link small" onclick="modeleImport()">Télécharger le modèle</button></p></div>
+    <div class="full" id="apercuImport"></div>
+  </div></form>`, `<button class="btn" onclick="closeModal()">Annuler</button><button class="btn pri" id="btnImport" disabled onclick="validerImport()">Importer</button>`, true);
+}
+function modeleImport(){ dl('modele_liste_classe.csv', toCSV([['Prénom','Nom','Sexe','Date de naissance','Lieu de naissance','N° CNI','Téléphone','Tuteur','Matricule'],['Awa','DIOP','F','15/01/2004','Kaolack','1751200401234','77 000 00 00','Mme Diop 77 111 11 11','']])); }
+async function lireFichierImport(input){
+  const f=input.files&&input.files[0]; input.value=''; if(!f) return;
+  document.getElementById('nomFichierImport').textContent='Lecture de '+f.name+'…';
+  try{
+    await chargerXLSX();
+    const wb=XLSX.read(await f.arrayBuffer(), {type:'array', cellDates:true});
+    const ws=wb.Sheets[wb.SheetNames[0]]; const tab=XLSX.utils.sheet_to_json(ws,{header:1, raw:true, defval:''}).filter(r=>r.some(c=>String(c).trim()!==''));
+    if(tab.length<2){ document.getElementById('nomFichierImport').textContent='Fichier vide ou sans ligne de données.'; return; }
+    // ligne d'en-tête = la première ligne qui contient au moins 2 titres reconnus
+    let hi=0; for(let i=0;i<Math.min(10,tab.length);i++){ const n=tab[i].filter(h=>Object.values(CHAMPS_IMPORT).some(l=>l.includes(normEntete(h)))).length; if(n>=2){ hi=i; break; } }
+    const ent=tab[hi].map(normEntete); const map={};
+    for(const [champ,noms] of Object.entries(CHAMPS_IMPORT)){ const idx=ent.findIndex(h=>noms.includes(h)); if(idx>=0) map[champ]=idx; }
+    if(map.nom===undefined && map.nomComplet===undefined){ document.getElementById('nomFichierImport').innerHTML='<span style="color:var(--out)">Colonne « Nom » introuvable : vérifiez la ligne des titres.</span>'; return; }
+    IMPORT={fichier:f.name, map, rows:tab.slice(hi+1).map(r=>{
+      const g=k=>map[k]!==undefined?r[map[k]]:'';
+      let prenom=String(g('prenom')||'').trim(), nom=String(g('nom')||'').trim();
+      if(!nom && map.nomComplet!==undefined){ const parts=String(g('nomComplet')).trim().split(/\s+/); const ordreNomPrenom=['nometprenom','nomprenom','nomsetprenoms'].includes(ent[map.nomComplet]);
+        if(ordreNomPrenom){ nom=parts.shift()||''; prenom=parts.join(' '); } else { nom=parts.pop()||''; prenom=parts.join(' '); } }
+      return { prenom, nom:nom.toUpperCase(), sexe:versSexe(g('sexe')), dateNaissance:versDateISO(g('dateNaissance')), lieuNaissance:String(g('lieuNaissance')||'').trim(),
+        numeroPiece:String(g('numeroPiece')||'').replace(/\s+/g,''), telephone:String(g('telephone')||'').trim(), tuteur:String(g('tuteur')||'').trim(),
+        matricule:String(g('matricule')||'').trim(), nationalite:String(g('nationalite')||'').trim(), dateInscription:versDateISO(g('dateInscription')) };
+    })};
+    document.getElementById('nomFichierImport').textContent=`${f.name} — ${IMPORT.rows.length} ligne(s), ${Object.keys(map).length} colonne(s) reconnue(s)`;
+    analyserImport();
+  }catch(e){ console.error(e); document.getElementById('nomFichierImport').innerHTML='<span style="color:var(--out)">Lecture impossible : '+esc(e.message||'format non reconnu')+' (connexion internet requise pour lire les fichiers Excel).</span>'; }
+}
+function analyserImport(){
+  const fm=document.getElementById('fm'); const box=document.getElementById('apercuImport'); const btn=document.getElementById('btnImport');
+  if(!fm||!IMPORT||!IMPORT.rows.length){ if(btn) btn.disabled=true; return; }
+  const etab=curEtabId(), fid=fm.formationId.value, auto=fm.autoMat.checked;
+  const exist=RAW.apprenants.filter(a=>etabIdOf(a)===etab);
+  const cle=x=>`${normEntete(x.prenom)}|${normEntete(x.nom)}|${x.dateNaissance||''}`;
+  const vus=new Set(); const base=matriculeAuto(etab,fid); let ec=base.ecole, fi=base.fil; const code=codeEtab(etabById(etab))||'ECOLE'; const sig=sigleFormation(formationParId(fid));
+  IMPORT.rows.forEach(r=>{
+    r.etat='ok'; r.note=''; r.matFinal=r.matricule;
+    if(!r.nom){ r.etat='err'; r.note='Nom manquant'; return; }
+    const dbl=exist.find(a=>(r.matricule&&(a.matricule||'').toUpperCase()===r.matricule.toUpperCase()) || cle(a)===cle(r) || (r.numeroPiece&&a.numeroPiece===r.numeroPiece));
+    if(dbl){ r.etat='dbl'; r.note='Déjà inscrit ('+(dbl.matricule||apprenantNom(dbl.id))+')'; return; }
+    if(vus.has(cle(r))){ r.etat='dbl'; r.note='Doublon dans le fichier'; return; } vus.add(cle(r));
+    if(!r.matFinal && auto){ r.matFinal=`${code}_${sig}_${String(ec).padStart(3,'0')}_${String(fi).padStart(3,'0')}`; r.ordreEcole=ec; r.ordreFiliere=fi; ec++; fi++; }
+  });
+  const ok=IMPORT.rows.filter(r=>r.etat==='ok').length, dbl=IMPORT.rows.filter(r=>r.etat==='dbl').length, err=IMPORT.rows.filter(r=>r.etat==='err').length;
+  box.innerHTML=`<div class="row" style="margin-bottom:8px"><span class="pill p-ok">${ok} à importer</span>${dbl?`<span class="pill p-part">${dbl} déjà présent(s) — ignoré(s)</span>`:''}${err?`<span class="pill p-no">${err} ligne(s) incomplète(s)</span>`:''}</div>
+    <div class="tbl-wrap" style="max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:10px"><table><thead><tr><th></th><th>Prénom</th><th>Nom</th><th>Sexe</th><th>Naissance</th><th>Lieu</th><th>N° pièce</th><th>Téléphone</th><th>Matricule</th></tr></thead><tbody>
+    ${IMPORT.rows.slice(0,300).map(r=>`<tr style="${r.etat==='ok'?'':'opacity:.55'}"><td>${r.etat==='ok'?'<span class="pill p-ok">OK</span>':`<span class="pill ${r.etat==='err'?'p-no':'p-part'}" title="${esc(r.note)}">${esc(r.note)}</span>`}</td><td>${esc(r.prenom)}</td><td>${esc(r.nom)}</td><td>${esc(r.sexe)}</td><td>${fdate(r.dateNaissance)}</td><td>${esc(r.lieuNaissance)}</td><td style="font-family:var(--mono);font-size:12px">${esc(r.numeroPiece)}</td><td>${esc(r.telephone)}</td><td style="font-family:var(--mono);font-size:12px">${esc(r.matFinal||'')}</td></tr>`).join('')}
+    </tbody></table></div>`;
+  btn.disabled=!ok; btn.textContent=`Importer ${ok} apprenant(s)`;
+}
+async function validerImport(){
+  const fm=document.getElementById('fm'); const fid=fm.formationId.value, dateDef=fm.dateInscription.value||today();
+  const aImporter=IMPORT.rows.filter(r=>r.etat==='ok'); const btn=document.getElementById('btnImport'); btn.disabled=true;
+  let n=0;
+  for(const r of aImporter){
+    btn.textContent=`Import… ${n+1}/${aImporter.length}`;
+    const d={ id:uidLocal(), prenom:r.prenom, nom:r.nom, sexe:r.sexe, dateNaissance:r.dateNaissance, lieuNaissance:r.lieuNaissance, numeroPiece:r.numeroPiece, telephone:r.telephone, tuteur:r.tuteur,
+      nationalite:r.nationalite, matricule:r.matFinal||'', formationId:fid, dateInscription:r.dateInscription||dateDef, statut:'actif', fraisAutres:0, remise:0, motifInscription:'Inscription (import)' };
+    if(r.ordreEcole){ d.ordreEcole=r.ordreEcole; d.ordreFiliere=r.ordreFiliere; }
+    if(await saveDoc('apprenants',d)===false) break; n++;
+  }
+  closeModal(); toast(`${n} apprenant(s) importé(s) en ${nomFormation(formationParId(fid))}`); location.hash='apprenants'; render();
+}
 
 /* ===== Fichiers (Supabase Storage, espace privé) ===== */
 const BUCKET='fin-dossiers';
@@ -1576,6 +1768,7 @@ async function pdfFicheInscription(id){ await withPdf(async()=>{
       ...(+a.fraisAutres?[['Frais supplémentaires',pm(a.fraisAutres)]]:[]), ...(+a.remise?[['Remise / bourse','- '+pm(a.remise)]]:[]),
       ['Montant total dû',pm(montantDu(a))],['Déjà versé',pm(montantPaye(a))],['Reste à payer',pm(reste(a))]] });
   y=doc.lastAutoTable.finalY+8;
+  if((a.historique||[]).length){ y=sectionTitle(doc,y,'Cursus'); doc.autoTable({...tblBase, startY:y+1, head:[['Année','Classe','Entrée','Sortie / statut']], body:cursusEntries(a).map(e=>[e.annee,T(nomFormation(e.f)),T(e.entree),T(e.sortie)])}); y=doc.lastAutoTable.finalY+8; }
   const docs=(a.documents||[]); if(docs.length){ y=sectionTitle(doc,y,'Pièces du dossier'); doc.autoTable({...tblBase, startY:y+1, head:[['Document','Fichier','Ajouté le']], body:docs.map(d=>[T(d.categorie||''),T(d.nom||''),fdate((d.ajouteLe||'').slice(0,10))])}); y=doc.lastAutoTable.finalY+8; }
   const H=doc.internal.pageSize.getHeight(); if(y>H-40){ doc.addPage(); y=25; }
   doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...C.mut);
